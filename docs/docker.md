@@ -10,7 +10,12 @@ Multi-stage build for the Subcults API server.
 
 **Build:**
 ```bash
+# Default (linux/amd64)
 docker build -f Dockerfile.api -t subcults-api:latest .
+
+# Cross-compile for ARM64
+docker build -f Dockerfile.api -t subcults-api:latest \
+  --build-arg TARGETARCH=arm64 .
 ```
 
 **Run:**
@@ -38,7 +43,12 @@ Multi-stage build for the Subcults Jetstream Indexer.
 
 **Build:**
 ```bash
+# Default (linux/amd64)
 docker build -f Dockerfile.indexer -t subcults-indexer:latest .
+
+# Cross-compile for ARM64
+docker build -f Dockerfile.indexer -t subcults-indexer:latest \
+  --build-arg TARGETARCH=arm64 .
 ```
 
 **Run:**
