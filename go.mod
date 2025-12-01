@@ -1,3 +1,3 @@
 module github.com/onnwee/subcults
 
-go 1.24.10
+go 1.21
