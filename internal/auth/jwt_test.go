@@ -8,7 +8,8 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-const testSecret = "test-secret-key-for-jwt-testing"
+// 44-character base64 string, as produced by `openssl rand -base64 32`
+const testSecret = "wJ6Qk8Qn1v9Qw1Zb2l8Qk9J3p6Qk8Qn1v9Qw1Zb2l8Qk="
 
 func TestGenerateAccessToken(t *testing.T) {
 	svc := NewJWTService(testSecret)
