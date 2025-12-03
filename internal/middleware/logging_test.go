@@ -97,16 +97,36 @@ func TestLogging_WithRequestID(t *testing.T) {
 	}
 }
 
+// userDIDMiddleware simulates authentication middleware that sets user DID.
+func userDIDMiddleware(did string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx := SetUserDID(r.Context(), did)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
+
+// errorCodeMiddleware simulates error handling middleware that sets error code.
+func errorCodeMiddleware(code string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx := SetErrorCode(r.Context(), code)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
+
 func TestLogging_WithUserDID(t *testing.T) {
 	buf := &bytes.Buffer{}
 	logger := newTestLogger(buf)
 
-	handler := Logging(logger)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Simulate authentication middleware setting user DID
-		ctx := SetUserDID(r.Context(), "did:web:example.com:user123")
-		*r = *r.WithContext(ctx)
-		w.WriteHeader(http.StatusOK)
-	}))
+	// Simulate auth middleware setting user DID before logging middleware
+	handler := userDIDMiddleware("did:web:example.com:user123")(
+		Logging(logger)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		})),
+	)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/me", nil)
 	rr := httptest.NewRecorder()
@@ -127,13 +147,13 @@ func TestLogging_ErrorResponse(t *testing.T) {
 	buf := &bytes.Buffer{}
 	logger := newTestLogger(buf)
 
-	handler := Logging(logger)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Simulate error handler setting error code
-		ctx := SetErrorCode(r.Context(), "VALIDATION_ERROR")
-		*r = *r.WithContext(ctx)
-		w.WriteHeader(http.StatusBadRequest)
-		_, _ = w.Write([]byte(`{"error":"validation failed"}`))
-	}))
+	// Error code is typically set by error handling middleware that runs before logging
+	handler := errorCodeMiddleware("VALIDATION_ERROR")(
+		Logging(logger)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = w.Write([]byte(`{"error":"validation failed"}`))
+		})),
+	)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/scenes", nil)
 	rr := httptest.NewRecorder()
@@ -160,11 +180,11 @@ func TestLogging_ServerError(t *testing.T) {
 	buf := &bytes.Buffer{}
 	logger := newTestLogger(buf)
 
-	handler := Logging(logger)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := SetErrorCode(r.Context(), "INTERNAL_ERROR")
-		*r = *r.WithContext(ctx)
-		w.WriteHeader(http.StatusInternalServerError)
-	}))
+	handler := errorCodeMiddleware("INTERNAL_ERROR")(
+		Logging(logger)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+		})),
+	)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/data", nil)
 	rr := httptest.NewRecorder()
@@ -292,15 +312,17 @@ func TestLogging_AllFieldsPresent(t *testing.T) {
 	buf := &bytes.Buffer{}
 	logger := newTestLogger(buf)
 
-	// Use RequestID middleware to set request ID
-	handler := RequestID(Logging(logger)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Set user DID and error code
-		ctx := SetUserDID(r.Context(), "did:plc:abcd1234")
-		ctx = SetErrorCode(ctx, "FORBIDDEN")
-		*r = *r.WithContext(ctx)
-		w.WriteHeader(http.StatusForbidden)
-		_, _ = w.Write([]byte(`{"error":"forbidden"}`))
-	})))
+	// Chain: RequestID -> UserDID -> ErrorCode -> Logging -> Handler
+	handler := RequestID(
+		userDIDMiddleware("did:plc:abcd1234")(
+			errorCodeMiddleware("FORBIDDEN")(
+				Logging(logger)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					w.WriteHeader(http.StatusForbidden)
+					_, _ = w.Write([]byte(`{"error":"forbidden"}`))
+				})),
+			),
+		),
+	)
 
 	req := httptest.NewRequest(http.MethodDelete, "/api/v1/scenes/123", nil)
 	req.Header.Set(RequestIDHeader, "req-id-789")
@@ -341,12 +363,12 @@ func TestLogging_NoErrorCodeFor2xx(t *testing.T) {
 	buf := &bytes.Buffer{}
 	logger := newTestLogger(buf)
 
-	handler := Logging(logger)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Set error code even for success (shouldn't be logged)
-		ctx := SetErrorCode(r.Context(), "SOME_CODE")
-		*r = *r.WithContext(ctx)
-		w.WriteHeader(http.StatusOK)
-	}))
+	// Set error code even for success (shouldn't be logged)
+	handler := errorCodeMiddleware("SOME_CODE")(
+		Logging(logger)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		})),
+	)
 
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
 	rr := httptest.NewRecorder()
