@@ -132,7 +132,7 @@ main() {
             echo "WARNING: This will drop all tables in the database!"
             read -r -p "Are you sure? (yes/no): " confirm
             if [[ "${confirm}" == "yes" ]]; then
-                run_migrate drop -f
+                run_migrate drop
                 echo "Done."
             else
                 echo "Aborted."
