@@ -1,7 +1,11 @@
-.PHONY: help build test lint clean
+.PHONY: help build build-api build-frontend test lint clean tidy verify fmt \
+	migrate-up migrate-down compose-up compose-down
 
 # Default target
 .DEFAULT_GOAL := help
+
+# Docker Compose configuration
+DOCKER_COMPOSE_FILE ?= docker-compose.yml
 
 ## help: Display this help message
 help:
@@ -17,10 +21,23 @@ build:
 	go build -o bin/indexer ./cmd/indexer
 	go build -o bin/backfill ./cmd/backfill
 
-## test: Run all tests
+## build-api: Build only the API binary
+build-api:
+	@echo "Building API binary..."
+	go build -o bin/api ./cmd/api
+
+## build-frontend: Build the frontend application
+build-frontend:
+	@echo "Building frontend..."
+	npm run build
+
+## test: Run all tests (Go and frontend if available)
 test:
-	@echo "Running tests..."
+	@echo "Running Go tests..."
 	go test -v -race -cover ./...
+	@echo "Running frontend tests..."
+	@echo "No frontend tests defined in package.json; skipping frontend tests."
+	npm run test --if-present
 
 ## lint: Run linters
 lint:
@@ -47,3 +64,21 @@ verify:
 ## fmt: Format Go code
 fmt:
 	go fmt ./...
+
+## migrate-up: Apply all pending database migrations
+migrate-up:
+	@./scripts/migrate.sh up
+
+## migrate-down: Rollback the last database migration
+migrate-down:
+	@./scripts/migrate.sh down 1
+
+## compose-up: Start all services with Docker Compose
+compose-up:
+	@test -f $(DOCKER_COMPOSE_FILE) || (echo "Error: $(DOCKER_COMPOSE_FILE) not found" && exit 1)
+	docker compose -f $(DOCKER_COMPOSE_FILE) up -d
+
+## compose-down: Stop all services with Docker Compose
+compose-down:
+	@test -f $(DOCKER_COMPOSE_FILE) || (echo "Error: $(DOCKER_COMPOSE_FILE) not found" && exit 1)
+	docker compose -f $(DOCKER_COMPOSE_FILE) down
