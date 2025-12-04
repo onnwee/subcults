@@ -36,6 +36,7 @@ test:
 	@echo "Running Go tests..."
 	go test -v -race -cover ./...
 	@echo "Running frontend tests..."
+	@echo "No frontend tests defined in package.json; skipping frontend tests."
 	npm run test --if-present
 
 ## lint: Run linters
