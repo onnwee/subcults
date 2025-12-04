@@ -102,7 +102,6 @@ networks:
     name: subcults-proxy
   internal:
     driver: bridge
-    internal: true
     name: subcults-internal
 
 # =============================================================================
