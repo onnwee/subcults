@@ -33,12 +33,20 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
     ./cmd/api
 
 # =============================================================================
+# Healthcheck binary stage - Get wget from busybox for healthchecks
+# =============================================================================
+FROM busybox:1.36-musl AS healthcheck
+
+# =============================================================================
 # Runtime stage - Using distroless for minimal attack surface
 # =============================================================================
 FROM gcr.io/distroless/static-debian12:nonroot
 
 # Copy the binary from builder
 COPY --from=builder /build/api /app/api
+
+# Copy wget for healthcheck (static binary from busybox)
+COPY --from=healthcheck /bin/wget /usr/bin/wget
 
 # Use non-root user (provided by distroless:nonroot)
 USER nonroot:nonroot

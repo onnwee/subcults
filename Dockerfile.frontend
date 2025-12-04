@@ -28,9 +28,12 @@ COPY . .
 RUN npm run build
 
 # =============================================================================
-# Output stage - Static files only (for copying to Caddy/nginx)
+# Output stage - Alpine for copying to volumes in Docker Compose
 # =============================================================================
-FROM scratch AS dist
+FROM alpine:3.19 AS dist
 
 # Copy only the built static assets
 COPY --from=builder /app/dist /dist
+
+# Default command does nothing - this image is used to copy assets to volumes
+CMD ["true"]

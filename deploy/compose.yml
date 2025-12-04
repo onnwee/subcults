@@ -1,0 +1,114 @@
+version: '3.9'
+
+services:
+  # =============================================================================
+  # Caddy - Reverse proxy serving static assets and proxying to API
+  # =============================================================================
+  caddy:
+    image: caddy:2-alpine
+    container_name: subcults-caddy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - web-dist:/srv/web:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - proxy
+      - internal
+    depends_on:
+      api:
+        condition: service_healthy
+      web-build:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  # =============================================================================
+  # API - Go backend server (internal network)
+  # =============================================================================
+  api:
+    build:
+      context: ..
+      dockerfile: Dockerfile.api
+    container_name: subcults-api
+    expose:
+      - "8080"
+    environment:
+      - PORT=8080
+      - GO_ENV=${GO_ENV:-development}
+      - DATABASE_URL=${DATABASE_URL}
+      - JWT_SECRET=${JWT_SECRET}
+      - LIVEKIT_URL=${LIVEKIT_URL}
+      - LIVEKIT_API_KEY=${LIVEKIT_API_KEY}
+      - LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET}
+      - STRIPE_API_KEY=${STRIPE_API_KEY}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
+      - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID}
+      - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY}
+      - R2_BUCKET_NAME=${R2_BUCKET_NAME}
+      - R2_ENDPOINT=${R2_ENDPOINT}
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - internal
+    restart: unless-stopped
+
+  # =============================================================================
+  # Indexer - Jetstream consumer (internal network only)
+  # =============================================================================
+  indexer:
+    build:
+      context: ..
+      dockerfile: Dockerfile.indexer
+    container_name: subcults-indexer
+    environment:
+      - GO_ENV=${GO_ENV:-development}
+      - DATABASE_URL=${DATABASE_URL}
+    networks:
+      - internal
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # =============================================================================
+  # Web Build - Build-only service that populates static assets volume
+  # =============================================================================
+  web-build:
+    build:
+      context: ..
+      dockerfile: Dockerfile.frontend
+    container_name: subcults-web-build
+    volumes:
+      - web-dist:/srv/web
+    # Copy built assets to the shared volume, then exit
+    command: ["sh", "-c", "cp -r /dist/* /srv/web/ && echo 'Static assets copied to volume'"]
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  proxy:
+    driver: bridge
+    name: subcults-proxy
+  internal:
+    driver: bridge
+    internal: true
+    name: subcults-internal
+
+# =============================================================================
+# Volumes
+# =============================================================================
+volumes:
+  web-dist:
+    name: subcults-web-dist
+  caddy_data:
+    name: subcults-caddy-data
+  caddy_config:
+    name: subcults-caddy-config

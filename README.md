@@ -56,6 +56,7 @@ subcults/
 ├── cmd/
 │   ├── api/          # Main API server entry point
 │   └── backfill/     # Backfill command for data migration
+├── deploy/           # Docker Compose and deployment configs
 ├── internal/         # Private application code
 ├── pkg/              # Reusable packages
 ├── web/              # Frontend application (Vite + React)
@@ -72,7 +73,7 @@ subcults/
 
 - Go 1.21+
 - Node.js 18+
-- Docker & Docker Compose (coming soon)
+- Docker & Docker Compose
 
 ### Setup
 
@@ -135,6 +136,46 @@ You can customize the Docker Compose file path using the `DOCKER_COMPOSE_FILE` v
 make compose-up DOCKER_COMPOSE_FILE=docker-compose.dev.yml
 ```
 
+### Full Stack with Docker Compose
+
+The `deploy/compose.yml` provides a complete local development stack with Caddy reverse proxy, API, indexer, and frontend:
+
+```bash
+# Navigate to the deploy directory
+cd deploy
+
+# Copy and configure environment variables
+cp ../configs/dev.env.example .env
+# Edit .env with your values
+
+# Start all services
+docker compose up -d
+
+# Verify services are healthy
+docker compose ps
+
+# View logs
+docker compose logs -f
+
+# Stop all services
+docker compose down
+```
+
+**Services:**
+- **Caddy** (ports 80/443): Reverse proxy serving static assets and proxying to API
+- **API** (internal): Go backend with health check at `/health`
+- **Indexer** (internal): Jetstream consumer for AT Protocol ingestion
+- **Web Build**: One-time service that builds and copies frontend assets
+
+**Networks:**
+- `proxy`: External-facing network for Caddy
+- `internal`: Internal network for API and Indexer (not exposed to host)
+
+**Volumes:**
+- `web-dist`: Shared volume for frontend static assets
+- `caddy_data`: Caddy TLS certificates and state
+- `caddy_config`: Caddy configuration
+
 ### Database Migrations
 
 Database schema changes are managed using [golang-migrate](https://github.com/golang-migrate/migrate). Migrations are stored in the `migrations/` directory.
@@ -194,10 +235,6 @@ Check current migration version:
 ```
 
 The script automatically uses either the local `migrate` binary (if installed) or falls back to Docker.
-
-## Getting Started (Local Skeleton – Planned)
-
-Documented in forthcoming issues: Docker Compose, Caddy reverse proxy, `.env.example` provisioning.
 
 ## License
 
