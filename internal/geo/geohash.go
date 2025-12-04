@@ -29,7 +29,7 @@ var validGeohashChars = map[rune]bool{
 //
 // Returns:
 //   - The truncated geohash if valid
-//   - Empty string if input is empty or contains invalid characters
+//   - Empty string if input is empty, contains invalid characters, or precision is less than 1
 //   - The input normalized to lowercase if it is shorter than precision
 func RoundGeohash(input string, precision int) string {
 	if input == "" {
