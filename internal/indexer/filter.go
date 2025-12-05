@@ -152,7 +152,21 @@ func validateJSONSyntax(payload []byte) error {
 	return nil
 }
 
-// SceneRecord represents the expected structure of an app.subcult.scene record.
+// validateStringField checks if a required string field exists and has the correct type.
+func validateStringField(record map[string]interface{}, fieldName string) error {
+	value, exists := record[fieldName]
+	if !exists {
+		return ErrMissingField
+	}
+	if _, ok := value.(string); !ok {
+		return ErrInvalidFieldType
+	}
+	return nil
+}
+
+// SceneRecord documents the expected structure of an app.subcult.scene record.
+// Note: This type is for documentation only. Validation uses map-based checking
+// to allow extra fields while enforcing required field presence and types.
 type SceneRecord struct {
 	Name        string `json:"name"`
 	Description string `json:"description,omitempty"`
@@ -164,20 +178,12 @@ func validateSceneRecord(payload []byte) error {
 	if err := json.Unmarshal(payload, &record); err != nil {
 		return ErrMalformedJSON
 	}
-
-	// Check required field: name
-	name, exists := record["name"]
-	if !exists {
-		return ErrMissingField
-	}
-	if _, ok := name.(string); !ok {
-		return ErrInvalidFieldType
-	}
-
-	return nil
+	return validateStringField(record, "name")
 }
 
-// EventRecord represents the expected structure of an app.subcult.event record.
+// EventRecord documents the expected structure of an app.subcult.event record.
+// Note: This type is for documentation only. Validation uses map-based checking
+// to allow extra fields while enforcing required field presence and types.
 type EventRecord struct {
 	Name    string `json:"name"`
 	SceneID string `json:"sceneId"`
@@ -189,29 +195,15 @@ func validateEventRecord(payload []byte) error {
 	if err := json.Unmarshal(payload, &record); err != nil {
 		return ErrMalformedJSON
 	}
-
-	// Check required field: name
-	name, exists := record["name"]
-	if !exists {
-		return ErrMissingField
+	if err := validateStringField(record, "name"); err != nil {
+		return err
 	}
-	if _, ok := name.(string); !ok {
-		return ErrInvalidFieldType
-	}
-
-	// Check required field: sceneId
-	sceneID, exists := record["sceneId"]
-	if !exists {
-		return ErrMissingField
-	}
-	if _, ok := sceneID.(string); !ok {
-		return ErrInvalidFieldType
-	}
-
-	return nil
+	return validateStringField(record, "sceneId")
 }
 
-// PostRecord represents the expected structure of an app.subcult.post record.
+// PostRecord documents the expected structure of an app.subcult.post record.
+// Note: This type is for documentation only. Validation uses map-based checking
+// to allow extra fields while enforcing required field presence and types.
 type PostRecord struct {
 	Text    string `json:"text"`
 	SceneID string `json:"sceneId"`
@@ -223,24 +215,8 @@ func validatePostRecord(payload []byte) error {
 	if err := json.Unmarshal(payload, &record); err != nil {
 		return ErrMalformedJSON
 	}
-
-	// Check required field: text
-	text, exists := record["text"]
-	if !exists {
-		return ErrMissingField
+	if err := validateStringField(record, "text"); err != nil {
+		return err
 	}
-	if _, ok := text.(string); !ok {
-		return ErrInvalidFieldType
-	}
-
-	// Check required field: sceneId
-	sceneID, exists := record["sceneId"]
-	if !exists {
-		return ErrMissingField
-	}
-	if _, ok := sceneID.(string); !ok {
-		return ErrInvalidFieldType
-	}
-
-	return nil
+	return validateStringField(record, "sceneId")
 }
