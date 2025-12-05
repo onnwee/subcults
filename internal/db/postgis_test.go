@@ -42,9 +42,11 @@ func TestPostGISVersion(t *testing.T) {
 	}
 
 	var version string
+	// VersionQuery is "SELECT PostGIS_Version()" - defined in db.go
 	err = db.QueryRow(VersionQuery).Scan(&version)
 	if err != nil {
-		t.Fatalf("PostGIS version query failed: %v\n\nEnsure PostGIS is enabled: CREATE EXTENSION IF NOT EXISTS postgis;", err)
+		t.Logf("Hint: Ensure PostGIS is enabled with: CREATE EXTENSION IF NOT EXISTS postgis;")
+		t.Fatalf("PostGIS version query failed: %v", err)
 	}
 
 	if version == "" {
