@@ -2,6 +2,7 @@ package trust
 
 import (
 	"math"
+	"strconv"
 	"testing"
 )
 
@@ -261,7 +262,7 @@ func TestDirtyTracker_Concurrency(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		go func(id int) {
 			for j := 0; j < 100; j++ {
-				sceneID := "scene-" + string(rune('a'+id))
+				sceneID := "scene-" + strconv.Itoa(id)
 				tracker.MarkDirty(sceneID)
 				tracker.IsDirty(sceneID)
 				tracker.GetDirtyScenes()
