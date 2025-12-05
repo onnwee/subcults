@@ -6,7 +6,7 @@
 ALTER TABLE posts ADD COLUMN IF NOT EXISTS attachments JSONB DEFAULT '[]'::jsonb;
 ALTER TABLE posts ADD COLUMN IF NOT EXISTS labels TEXT[] DEFAULT '{}';
 
--- Step 2: Rename content to text (if content exists)
+-- Step 2: Rename content to text (if content exists) and ensure NOT NULL constraint
 DO $$
 BEGIN
     IF EXISTS (
@@ -14,6 +14,13 @@ BEGIN
         WHERE table_name = 'posts' AND column_name = 'content'
     ) THEN
         ALTER TABLE posts RENAME COLUMN content TO text;
+    END IF;
+    -- Ensure text column has NOT NULL constraint (preserving original schema's data integrity)
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'posts' AND column_name = 'text'
+    ) THEN
+        ALTER TABLE posts ALTER COLUMN text SET NOT NULL;
     END IF;
 END $$;
 
@@ -89,6 +96,11 @@ CREATE INDEX IF NOT EXISTS idx_posts_text_fts ON posts USING GIN(text_fts);
 
 -- GIN index for labels array queries (moderation filtering)
 CREATE INDEX IF NOT EXISTS idx_posts_labels ON posts USING GIN(labels);
+
+-- Preserve idx_posts_created index from original schema (chronological queries)
+-- This index already exists, but recreate to ensure it's present
+DROP INDEX IF EXISTS idx_posts_created;
+CREATE INDEX idx_posts_created ON posts(created_at DESC) WHERE deleted_at IS NULL;
 
 -- Update table and column comments
 COMMENT ON TABLE posts IS 'Content posts within scenes/events with attachments and moderation labels';
