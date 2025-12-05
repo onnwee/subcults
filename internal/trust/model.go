@@ -63,8 +63,8 @@ func ComputeTrustScore(memberships []Membership, alliances []Alliance) float64 {
 	// Calculate average membership trust weight (with role multipliers)
 	var membershipSum float64
 	for _, m := range memberships {
-		multiplier := RoleMultiplier[m.Role]
-		if multiplier == 0 {
+		multiplier, ok := RoleMultiplier[m.Role]
+		if !ok {
 			multiplier = DefaultRoleMultiplier
 		}
 		membershipSum += m.TrustWeight * multiplier

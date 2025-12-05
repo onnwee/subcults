@@ -95,10 +95,12 @@ func (j *RecomputeJob) Stop() {
 		j.mu.Unlock()
 		return
 	}
+	stopCh := j.stopCh
+	doneCh := j.doneCh
 	j.mu.Unlock()
 
-	close(j.stopCh)
-	<-j.doneCh
+	close(stopCh)
+	<-doneCh
 
 	j.mu.Lock()
 	j.running = false
