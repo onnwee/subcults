@@ -5,7 +5,6 @@ package indexer
 import (
 	"context"
 	"log/slog"
-	"math"
 	"math/rand"
 	"sync"
 	"time"
@@ -161,8 +160,13 @@ func (c *Client) computeBackoff() time.Duration {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	// Exponential backoff: baseDelay * 2^attempts
-	backoff := float64(c.config.BaseDelay) * math.Pow(2, float64(c.reconnectCount))
+	// Exponential backoff: baseDelay * 2^attempts using bit shifting
+	// Cap the shift at 30 to prevent overflow (2^30 = ~1 billion)
+	shift := c.reconnectCount
+	if shift > 30 {
+		shift = 30
+	}
+	backoff := float64(c.config.BaseDelay) * float64(int64(1)<<shift)
 
 	// Cap at max delay
 	if backoff > float64(c.config.MaxDelay) {
