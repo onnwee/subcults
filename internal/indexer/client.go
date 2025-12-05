@@ -24,6 +24,7 @@ type Client struct {
 	config  Config
 	handler MessageHandler
 	logger  *slog.Logger
+	rng     *rand.Rand
 
 	mu          sync.Mutex
 	conn        *websocket.Conn
@@ -46,6 +47,7 @@ func NewClient(config Config, handler MessageHandler, logger *slog.Logger) (*Cli
 		config:  config,
 		handler: handler,
 		logger:  logger,
+		rng:     rand.New(rand.NewSource(time.Now().UnixNano())),
 	}, nil
 }
 
@@ -156,6 +158,9 @@ func (c *Client) close() {
 
 // computeBackoff calculates the next reconnection delay with exponential backoff and jitter.
 func (c *Client) computeBackoff() time.Duration {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	// Exponential backoff: baseDelay * 2^attempts
 	backoff := float64(c.config.BaseDelay) * math.Pow(2, float64(c.reconnectCount))
 
@@ -167,7 +172,7 @@ func (c *Client) computeBackoff() time.Duration {
 	// Apply jitter: delay * (1 - jitter/2 + rand*jitter)
 	// This creates a range of [delay*(1-jitter/2), delay*(1+jitter/2)]
 	if c.config.JitterFactor > 0 {
-		jitter := (rand.Float64() - 0.5) * c.config.JitterFactor
+		jitter := (c.rng.Float64() - 0.5) * c.config.JitterFactor
 		backoff = backoff * (1 + jitter)
 	}
 

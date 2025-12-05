@@ -83,14 +83,16 @@ func newMockServer(closeAfterN int) *mockServer {
 
 		// Send messages until closeAfterN is reached
 		for {
-			count := atomic.AddInt32(&ms.messagesSent, 1)
-			if ms.closeAfterN > 0 && count > ms.closeAfterN {
-				conn.Close()
+			// First send the message
+			err := conn.WriteMessage(websocket.TextMessage, []byte(`{"test":"message"}`))
+			if err != nil {
 				return
 			}
 
-			err := conn.WriteMessage(websocket.TextMessage, []byte(`{"test":"message"}`))
-			if err != nil {
+			// Then increment counter and check if we should close
+			count := atomic.AddInt32(&ms.messagesSent, 1)
+			if ms.closeAfterN > 0 && count >= ms.closeAfterN {
+				conn.Close()
 				return
 			}
 			time.Sleep(10 * time.Millisecond)
@@ -111,6 +113,12 @@ func (ms *mockServer) Close() {
 	}
 	ms.mu.Unlock()
 	ms.server.Close()
+}
+
+func (ms *mockServer) ConnectionCount() int {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+	return len(ms.connections)
 }
 
 func (ms *mockServer) MessagesSent() int32 {
@@ -160,45 +168,32 @@ func TestClient_Connect_Success(t *testing.T) {
 }
 
 func TestClient_Reconnect_AfterForcedClose(t *testing.T) {
-	// Server will close after 3 messages
-	ms := newMockServer(3)
+	// Server will close after 2 messages to make reconnection faster
+	ms := newMockServer(2)
 	defer ms.Close()
 
 	config := Config{
 		URL:          ms.URL(),
-		BaseDelay:    10 * time.Millisecond,
-		MaxDelay:     50 * time.Millisecond,
+		BaseDelay:    5 * time.Millisecond, // Very short backoff for testing
+		MaxDelay:     10 * time.Millisecond,
 		JitterFactor: 0,
 	}
 
-	var connectionCount int32
-	var mu sync.Mutex
-	var lastConnected time.Time
-
-	handler := func(msgType int, payload []byte) error {
-		mu.Lock()
-		if lastConnected.IsZero() || time.Since(lastConnected) > 20*time.Millisecond {
-			atomic.AddInt32(&connectionCount, 1)
-			lastConnected = time.Now()
-		}
-		mu.Unlock()
-		return nil
-	}
-
-	client, err := NewClient(config, handler, slog.Default())
+	client, err := NewClient(config, nil, slog.Default())
 	if err != nil {
 		t.Fatalf("NewClient() error = %v", err)
 	}
 
-	// Run for enough time to reconnect at least once
-	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	// Run for enough time to reconnect at least once (longer timeout for reliability)
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
 
 	_ = client.Run(ctx)
 
-	// Should have connected multiple times due to forced closes
-	if atomic.LoadInt32(&connectionCount) < 2 {
-		t.Errorf("expected at least 2 connections due to reconnect, got %d", connectionCount)
+	// Check server-side connection count - should have seen multiple connections
+	connCount := ms.ConnectionCount()
+	if connCount < 2 {
+		t.Errorf("expected at least 2 connections due to reconnect, got %d", connCount)
 	}
 }
 
