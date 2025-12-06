@@ -22,9 +22,14 @@ type Scene struct {
 	Description   string   `json:"description,omitempty"`
 	AllowPrecise  bool     `json:"allow_precise"`
 	PrecisePoint  *Point   `json:"precise_point,omitempty"`
-	CoarseGeohash string   `json:"coarse_geohash"`       // Required for privacy-conscious discovery
+	// CoarseGeohash is a required NOT NULL field for privacy-conscious discovery.
+	// Must be set before persisting to database. Enables location-based search without
+	// exposing precise coordinates; omitting this field will cause database errors.
+	CoarseGeohash string   `json:"coarse_geohash"`
 	Tags          []string `json:"tags,omitempty"`       // Categorization tags
-	Visibility    string   `json:"visibility,omitempty"` // public, private, unlisted
+	// Visibility mode for the scene. Valid values are "public", "private", or "unlisted".
+	// Enforced by database CHECK constraint.
+	Visibility    string   `json:"visibility,omitempty"`
 	Palette       *Palette `json:"palette,omitempty"`    // Color scheme
 	OwnerUserID   *string  `json:"owner_user_id,omitempty"` // FK to users table
 	

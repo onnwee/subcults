@@ -24,9 +24,10 @@ ALTER TABLE scenes ADD COLUMN IF NOT EXISTS visibility TEXT DEFAULT 'public';
 DO $$
 BEGIN
     IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint c 
-        JOIN pg_class t ON c.conrelid = t.oid 
-        WHERE t.relname = 'scenes' AND c.conname = 'chk_scene_visibility'
+        SELECT 1 FROM pg_constraint c
+        JOIN pg_class t ON c.conrelid = t.oid
+        JOIN pg_namespace n ON t.relnamespace = n.oid
+        WHERE t.relname = 'scenes' AND n.nspname = 'public' AND c.conname = 'chk_scene_visibility'
     ) THEN
         ALTER TABLE scenes ADD CONSTRAINT chk_scene_visibility
             CHECK (visibility IN ('public', 'private', 'unlisted'));
@@ -54,12 +55,14 @@ BEGIN
         WHERE table_schema = 'public' AND table_name = 'scenes' AND column_name = 'primary_color'
     ) THEN
         -- Build palette JSON from existing color columns
+        -- Only update if palette is not already set to avoid overwriting on re-run
         UPDATE scenes 
         SET palette = jsonb_build_object(
             'primary', COALESCE(primary_color, '#000000'),
             'secondary', COALESCE(secondary_color, '#ffffff')
         )
-        WHERE primary_color IS NOT NULL OR secondary_color IS NOT NULL;
+        WHERE (primary_color IS NOT NULL OR secondary_color IS NOT NULL)
+          AND (palette IS NULL OR palette = '{}'::jsonb);
         
         -- Drop the old columns
         ALTER TABLE scenes DROP COLUMN IF EXISTS primary_color;
@@ -77,13 +80,14 @@ COMMENT ON COLUMN scenes.palette IS 'JSONB color palette for scene visual identi
 ALTER TABLE scenes ADD COLUMN IF NOT EXISTS owner_user_id UUID;
 
 -- Create FK constraint to users table
--- Note: This allows NULL initially to support migration from owner_did
+-- Note: This allows NULL to support gradual migration from owner_did via application logic
 DO $$
 BEGIN
     IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint c 
-        JOIN pg_class t ON c.conrelid = t.oid 
-        WHERE t.relname = 'scenes' AND c.conname = 'fk_scenes_owner_user'
+        SELECT 1 FROM pg_constraint c
+        JOIN pg_class t ON c.conrelid = t.oid
+        JOIN pg_namespace n ON t.relnamespace = n.oid
+        WHERE t.relname = 'scenes' AND n.nspname = 'public' AND c.conname = 'fk_scenes_owner_user'
     ) THEN
         ALTER TABLE scenes ADD CONSTRAINT fk_scenes_owner_user
             FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE SET NULL;
@@ -104,9 +108,10 @@ COMMENT ON COLUMN scenes.owner_user_id IS 'Foreign key to users table for owners
 -- Using geohash 's00000' which represents coordinates (0,0) - "Null Island" in the Gulf of Guinea
 -- This is a safe placeholder as no real scenes should exist at this location
 -- Real scenes must have proper geohashes set via application logic before insertion
+-- Note: Only updating NULL values; empty strings are preserved as they indicate invalid data
 UPDATE scenes 
 SET coarse_geohash = 's00000' 
-WHERE coarse_geohash IS NULL OR coarse_geohash = '';
+WHERE coarse_geohash IS NULL;
 
 -- Now make coarse_geohash NOT NULL
 ALTER TABLE scenes ALTER COLUMN coarse_geohash SET NOT NULL;
