@@ -16,6 +16,7 @@ ALTER TABLE scenes DROP COLUMN IF EXISTS owner_user_id;
 
 -- Restore primary_color and secondary_color from palette
 -- Extract colors back from JSONB before dropping palette
+-- Limitation: Only extracts 'primary' and 'secondary' keys; any additional palette keys will be lost
 ALTER TABLE scenes ADD COLUMN IF NOT EXISTS primary_color VARCHAR(7);
 ALTER TABLE scenes ADD COLUMN IF NOT EXISTS secondary_color VARCHAR(7);
 

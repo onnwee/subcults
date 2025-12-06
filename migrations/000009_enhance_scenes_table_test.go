@@ -173,6 +173,32 @@ func TestMigration000009_FTSSearchVector(t *testing.T) {
 	if count != 1 {
 		t.Errorf("Expected 1 result from FTS search for 'electronic', got %d", count)
 	}
+
+	// Test FTS stemming - "electronics" should match "electronic"
+	err = db.QueryRow(`
+		SELECT COUNT(*) FROM scenes 
+		WHERE name_desc_tags_fts @@ to_tsquery('english', 'electronics')
+		AND id = $1
+	`, sceneID).Scan(&count)
+	if err != nil {
+		t.Fatalf("failed to search FTS with stemming: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("Expected 1 result from FTS stemming search (electronics->electronic), got %d", count)
+	}
+
+	// Test multi-word phrase query
+	err = db.QueryRow(`
+		SELECT COUNT(*) FROM scenes 
+		WHERE name_desc_tags_fts @@ to_tsquery('english', 'testing & full')
+		AND id = $1
+	`, sceneID).Scan(&count)
+	if err != nil {
+		t.Fatalf("failed to search FTS with phrase: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("Expected 1 result from multi-word FTS search, got %d", count)
+	}
 }
 
 // TestMigration000009_TagsColumn verifies that tags column exists and works correctly.
@@ -215,6 +241,19 @@ func TestMigration000009_TagsColumn(t *testing.T) {
 	if len(tags) != 3 {
 		t.Errorf("Expected 3 tags, got %d", len(tags))
 	}
+
+	// Test GIN index usage with array containment operator
+	var ginCount int
+	err = db.QueryRow(`
+		SELECT COUNT(*) FROM scenes 
+		WHERE tags @> ARRAY['techno'] AND id = $1
+	`, sceneID).Scan(&ginCount)
+	if err != nil {
+		t.Fatalf("failed to query tags with containment operator: %v", err)
+	}
+	if ginCount != 1 {
+		t.Errorf("Expected 1 result from tags containment search, got %d", ginCount)
+	}
 }
 
 // TestMigration000009_VisibilityConstraint verifies visibility CHECK constraint.
@@ -234,7 +273,7 @@ func TestMigration000009_VisibilityConstraint(t *testing.T) {
 		t.Fatalf("failed to ping database: %v", err)
 	}
 
-	// Try to insert with invalid visibility - should fail
+	// Try to insert with invalid visibility - should fail with CHECK constraint violation
 	_, err = db.Exec(`
 		INSERT INTO scenes (name, owner_did, allow_precise, coarse_geohash, visibility) 
 		VALUES ('Invalid Visibility Test', 'did:example:invalid', false, 's00000', 'invalid_value')
@@ -242,7 +281,16 @@ func TestMigration000009_VisibilityConstraint(t *testing.T) {
 	if err == nil {
 		t.Fatal("Expected error when inserting scene with invalid visibility, but got none")
 	}
-	t.Logf("Got expected error for invalid visibility: %v", err)
+	
+	// Verify it's a CHECK constraint violation (PostgreSQL error code 23514)
+	if pqErr, ok := err.(*pq.Error); ok {
+		if pqErr.Code != "23514" {
+			t.Errorf("Expected CHECK constraint violation (23514), got error code: %s", pqErr.Code)
+		}
+		t.Logf("Got expected CHECK constraint error: %v", err)
+	} else {
+		t.Logf("Got expected error (not pq.Error): %v", err)
+	}
 
 	// Insert with valid visibilities
 	validVisibilities := []string{"public", "private", "unlisted"}
@@ -303,6 +351,16 @@ func TestMigration000009_PaletteColumn(t *testing.T) {
 		t.Error("Expected non-empty palette")
 	}
 	t.Logf("Palette: %s", palette)
+
+	// Test palette key extraction
+	var primaryColor string
+	err = db.QueryRow("SELECT palette->>'primary' FROM scenes WHERE id = $1", sceneID).Scan(&primaryColor)
+	if err != nil {
+		t.Fatalf("failed to extract primary color: %v", err)
+	}
+	if primaryColor != "#ff0000" {
+		t.Errorf("Expected primary color '#ff0000', got '%s'", primaryColor)
+	}
 }
 
 // TestMigration000009_PrivacyConstraintsPreserved verifies that privacy constraints
