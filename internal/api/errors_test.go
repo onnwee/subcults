@@ -138,7 +138,8 @@ func TestWriteError_AllErrorCodes(t *testing.T) {
 }
 
 func TestWriteError_SetsErrorCodeInContext(t *testing.T) {
-	// Create a handler that verifies error code is set in context
+	// This test verifies the error response structure returned by WriteError.
+	// Context error code propagation is handled by middleware in integration tests.
 	handlerCalled := false
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -155,9 +156,6 @@ func TestWriteError_SetsErrorCodeInContext(t *testing.T) {
 		t.Fatal("handler was not called")
 	}
 
-	// Note: WriteError sets the error code, but it returns a new context
-	// In a real scenario, this would be captured by middleware
-	// For now, we just verify the response structure
 	var resp ErrorResponse
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("failed to parse response: %v", err)
@@ -175,9 +173,10 @@ func TestWriteError_IntegrationWithLoggingMiddleware(t *testing.T) {
 		Level: slog.LevelDebug,
 	}))
 
-	// Create handler that uses WriteError
+	// Create handler that properly sets error code in context before calling WriteError
 	handler := middleware.Logging(logger)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		WriteError(w, r.Context(), http.StatusNotFound, ErrCodeNotFound, "Resource not found")
+		ctx := middleware.SetErrorCode(r.Context(), ErrCodeNotFound)
+		WriteError(w, ctx, http.StatusNotFound, ErrCodeNotFound, "Resource not found")
 	}))
 
 	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
@@ -217,8 +216,10 @@ func TestWriteError_IntegrationWithLoggingMiddleware(t *testing.T) {
 	if entry.Level != "WARN" {
 		t.Errorf("expected log level WARN for 4xx, got %s", entry.Level)
 	}
-	// Note: error_code might not be captured because WriteError creates a new context
-	// but doesn't update the request. In real usage, middleware would need to handle this.
+	// Verify error_code is captured in logs
+	if entry.ErrorCode != ErrCodeNotFound {
+		t.Errorf("expected error_code %s in logs, got %s", ErrCodeNotFound, entry.ErrorCode)
+	}
 }
 
 func TestStatusCodeMapping(t *testing.T) {
@@ -301,7 +302,8 @@ func TestWriteError_WithRequestID(t *testing.T) {
 
 	handler := middleware.RequestID(
 		middleware.Logging(logger)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			WriteError(w, r.Context(), http.StatusUnauthorized, ErrCodeAuthFailed, "Invalid token")
+			ctx := middleware.SetErrorCode(r.Context(), ErrCodeAuthFailed)
+			WriteError(w, ctx, http.StatusUnauthorized, ErrCodeAuthFailed, "Invalid token")
 		})),
 	)
 
@@ -325,9 +327,10 @@ func TestWriteError_WithRequestID(t *testing.T) {
 		t.Errorf("expected code %s, got %s", ErrCodeAuthFailed, resp.Error.Code)
 	}
 
-	// Verify request ID is in logs
+	// Verify request ID and error code are in logs
 	type logEntry struct {
 		RequestID string `json:"request_id"`
+		ErrorCode string `json:"error_code"`
 	}
 	var entry logEntry
 	if err := json.Unmarshal(buf.Bytes(), &entry); err != nil {
@@ -336,6 +339,9 @@ func TestWriteError_WithRequestID(t *testing.T) {
 
 	if entry.RequestID != "test-req-123" {
 		t.Errorf("expected request_id test-req-123 in logs, got %s", entry.RequestID)
+	}
+	if entry.ErrorCode != ErrCodeAuthFailed {
+		t.Errorf("expected error_code %s in logs, got %s", ErrCodeAuthFailed, entry.ErrorCode)
 	}
 }
 
