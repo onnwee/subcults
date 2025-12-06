@@ -3,6 +3,7 @@
 package indexer
 
 import (
+	"crypto/subtle"
 	"net/http"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -12,14 +13,13 @@ import (
 // MetricsHandler creates an HTTP handler for the Prometheus metrics endpoint.
 // It uses the provided registry to gather metrics.
 func MetricsHandler(reg *prometheus.Registry) http.Handler {
-	return promhttp.HandlerFor(reg, promhttp.HandlerOpts{
-		Registry: reg,
-	})
+	return promhttp.HandlerFor(reg, promhttp.HandlerOpts{})
 }
 
 // InternalAuthMiddleware restricts access to requests with a valid token.
 // If token is empty, no authentication is required.
 // The token is checked against the X-Internal-Token header.
+// Uses constant-time comparison to prevent timing attacks.
 func InternalAuthMiddleware(token string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -29,9 +29,9 @@ func InternalAuthMiddleware(token string) func(http.Handler) http.Handler {
 				return
 			}
 
-			// Check for internal token header
+			// Check for internal token header using constant-time comparison
 			headerToken := r.Header.Get("X-Internal-Token")
-			if headerToken != token {
+			if subtle.ConstantTimeCompare([]byte(headerToken), []byte(token)) != 1 {
 				http.Error(w, "Forbidden", http.StatusForbidden)
 				return
 			}

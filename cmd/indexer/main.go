@@ -64,7 +64,7 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		if _, err := w.Write([]byte(`{"status":"healthy"}`)); err != nil {
-			slog.Error("failed to write health response", "error", err)
+			logger.Error("failed to write health response", "error", err)
 		}
 	})
 
