@@ -15,7 +15,7 @@ import (
 	"os"
 	"testing"
 
-	_ "github.com/lib/pq" // PostgreSQL driver
+	"github.com/lib/pq" // PostgreSQL driver and array support
 )
 
 // TestMigration000009_CoarseGeohashNotNull verifies that coarse_geohash is NOT NULL
@@ -202,7 +202,7 @@ func TestMigration000009_TagsColumn(t *testing.T) {
 
 	// Verify tags were stored correctly
 	var tags []string
-	err = db.QueryRow("SELECT tags FROM scenes WHERE id = $1", sceneID).Scan(&tags)
+	err = db.QueryRow("SELECT tags FROM scenes WHERE id = $1", sceneID).Scan(pq.Array(&tags))
 	if err != nil {
 		t.Fatalf("failed to query tags: %v", err)
 	}
