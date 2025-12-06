@@ -3,6 +3,7 @@ package audit
 import (
 	"context"
 	"net/http"
+	"strings"
 
 	"github.com/onnwee/subcults/internal/middleware"
 )
@@ -29,9 +30,15 @@ func LogAccess(ctx context.Context, repo Repository, entityType, entityID, actio
 // It extracts user DID, request ID, IP address, and user agent from the request/context.
 func LogAccessFromRequest(r *http.Request, repo Repository, entityType, entityID, action string) error {
 	// Extract IP address from request
+	// X-Forwarded-For can contain multiple IPs (client, proxy1, proxy2, ...)
+	// Use the first (leftmost) IP which represents the original client
 	ipAddress := r.RemoteAddr
 	if forwardedFor := r.Header.Get("X-Forwarded-For"); forwardedFor != "" {
-		ipAddress = forwardedFor
+		// Split on comma and take the first IP, trimming whitespace
+		ips := strings.Split(forwardedFor, ",")
+		if len(ips) > 0 && strings.TrimSpace(ips[0]) != "" {
+			ipAddress = strings.TrimSpace(ips[0])
+		}
 	}
 
 	entry := LogEntry{

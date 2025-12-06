@@ -341,9 +341,9 @@ func TestLogAccessFromRequest(t *testing.T) {
 func TestLogAccessFromRequest_WithXForwardedFor(t *testing.T) {
 	repo := NewInMemoryRepository()
 
-	// Create a test HTTP request with X-Forwarded-For header
+	// Create a test HTTP request with X-Forwarded-For header containing multiple IPs
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/scenes/scene-123", nil)
-	req.Header.Set("X-Forwarded-For", "203.0.113.195")
+	req.Header.Set("X-Forwarded-For", "203.0.113.195, 198.51.100.178, 192.0.2.1")
 	req.RemoteAddr = "192.168.1.100:12345"
 	
 	ctx := middleware.SetUserDID(req.Context(), "did:web:test.com:user789")
@@ -364,9 +364,41 @@ func TestLogAccessFromRequest_WithXForwardedFor(t *testing.T) {
 	}
 
 	log := results[0]
-	// X-Forwarded-For should take precedence
+	// X-Forwarded-For should use first IP (original client)
 	if log.IPAddress != "203.0.113.195" {
-		t.Errorf("LogAccessFromRequest() IPAddress = %q, want 203.0.113.195", log.IPAddress)
+		t.Errorf("LogAccessFromRequest() IPAddress = %q, want 203.0.113.195 (first IP from X-Forwarded-For)", log.IPAddress)
+	}
+}
+
+func TestLogAccessFromRequest_WithEmptyXForwardedFor(t *testing.T) {
+	repo := NewInMemoryRepository()
+
+	// Create a test HTTP request with empty X-Forwarded-For header
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/scenes/scene-456", nil)
+	req.Header.Set("X-Forwarded-For", "  ,  ")
+	req.RemoteAddr = "192.168.1.100:12345"
+	
+	ctx := middleware.SetUserDID(req.Context(), "did:web:test.com:user789")
+	req = req.WithContext(ctx)
+
+	err := LogAccessFromRequest(req, repo, "scene", "scene-456", "access_precise_location")
+	if err != nil {
+		t.Fatalf("LogAccessFromRequest() error = %v", err)
+	}
+
+	results, err := repo.QueryByEntity("scene", "scene-456", 0)
+	if err != nil {
+		t.Fatalf("QueryByEntity() error = %v", err)
+	}
+
+	if len(results) != 1 {
+		t.Fatalf("Expected 1 log entry, got %d", len(results))
+	}
+
+	log := results[0]
+	// Should fall back to RemoteAddr when X-Forwarded-For is empty
+	if log.IPAddress != "192.168.1.100:12345" {
+		t.Errorf("LogAccessFromRequest() IPAddress = %q, want 192.168.1.100:12345 (from RemoteAddr)", log.IPAddress)
 	}
 }
 
