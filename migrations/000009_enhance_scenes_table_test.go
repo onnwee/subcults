@@ -20,6 +20,7 @@ import (
 
 const (
 	// testGeohash is a placeholder geohash for testing (represents 0,0 coordinates at "Null Island")
+	// SQL queries use the literal value directly for clarity; this constant documents the standard test value.
 	testGeohash = "s00000"
 )
 
