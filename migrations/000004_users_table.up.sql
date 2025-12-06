@@ -4,7 +4,7 @@
 -- Users table - core identity with ATProto integration
 CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    did TEXT, -- ATProto Decentralized Identifier (optional, linked after OAuth)
+    did TEXT UNIQUE, -- ATProto Decentralized Identifier (optional, linked after OAuth)
     handle TEXT NOT NULL UNIQUE, -- Unique user handle (UNIQUE constraint creates implicit index)
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
