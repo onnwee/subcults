@@ -53,6 +53,7 @@ var (
 	ErrMissingStripeWebhookSecret = errors.New("STRIPE_WEBHOOK_SECRET is required")
 	ErrMissingMapTilerAPIKey    = errors.New("MAPTILER_API_KEY is required")
 	ErrMissingJetstreamURL      = errors.New("JETSTREAM_URL is required")
+	ErrInvalidPort              = errors.New("PORT must be a valid integer")
 )
 
 // Default values for non-secret configuration.
@@ -64,20 +65,27 @@ const (
 // Load reads configuration from environment variables and an optional config file.
 // Environment variables take precedence over file values.
 // Returns the loaded config and a slice of validation errors (empty if valid).
+// If a config file path is provided and the file cannot be loaded, an error is returned.
 func Load(configFilePath string) (*Config, []error) {
 	k := koanf.New(".")
+	var loadErrs []error
 
 	// Load from YAML file first if provided (lower precedence)
 	if configFilePath != "" {
 		if err := k.Load(file.Provider(configFilePath), yaml.Parser()); err != nil {
-			// File loading error is not fatal - continue with env vars
-			// but we could log this if desired
+			return nil, []error{fmt.Errorf("failed to load config file %s: %w", configFilePath, err)}
 		}
+	}
+
+	// Parse port from env, collecting error if invalid
+	port, portErr := getEnvIntOrDefault("PORT", k.Int("port"), DefaultPort)
+	if portErr != nil {
+		loadErrs = append(loadErrs, portErr)
 	}
 
 	// Build config struct, with env vars taking precedence over file values
 	cfg := &Config{
-		Port:                getEnvIntOrDefault("PORT", k.Int("port"), DefaultPort),
+		Port:                port,
 		Env:                 getEnvOrDefault("ENV", k.String("env"), DefaultEnv),
 		DatabaseURL:         getEnvOrKoanf("DATABASE_URL", k, "database_url"),
 		JWTSecret:           getEnvOrKoanf("JWT_SECRET", k, "jwt_secret"),
@@ -92,6 +100,7 @@ func Load(configFilePath string) (*Config, []error) {
 
 	// Validate and collect errors
 	errs := cfg.Validate()
+	errs = append(loadErrs, errs...)
 
 	return cfg, errs
 }
