@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+
+	"github.com/onnwee/subcults/internal/middleware"
 )
 
 // Common error codes used throughout the API.
@@ -53,8 +55,8 @@ type ErrorDetail struct {
 // Format: {"error": {"code": "error_code", "message": "Error description"}}
 //
 // The error_code will be automatically logged by the logging middleware
-// for all 4xx and 5xx responses if you call SetErrorCode on the request context
-// before calling WriteError.
+// for all 4xx and 5xx responses if you call SetErrorCode on the context
+// and pass the updated context to WriteError.
 //
 // Example:
 //
@@ -68,6 +70,9 @@ type ErrorDetail struct {
 //	    api.WriteError(w, ctx, http.StatusNotFound, api.ErrCodeNotFound, "Scene not found")
 //	}
 func WriteError(w http.ResponseWriter, ctx context.Context, status int, code, message string) {
+	// Update the context in the response writer if supported (for logging middleware)
+	middleware.UpdateResponseContext(w, ctx)
+
 	// Create error response
 	errResp := ErrorResponse{
 		Error: ErrorDetail{
