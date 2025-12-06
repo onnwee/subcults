@@ -356,7 +356,10 @@ func TestPrivacy_Upsert_PreservesConsent(t *testing.T) {
 	}
 
 	// Verify no precise point stored
-	fetched1, _ := repo.GetByRecordKey(did, rkey)
+	fetched1, err := repo.GetByRecordKey(did, rkey)
+	if err != nil {
+		t.Fatalf("GetByRecordKey() error = %v", err)
+	}
 	if fetched1.PrecisePoint != nil {
 		t.Errorf("Privacy violation: upsert insert without consent stored precise point: %+v", fetched1.PrecisePoint)
 	}
@@ -384,7 +387,10 @@ func TestPrivacy_Upsert_PreservesConsent(t *testing.T) {
 	}
 
 	// Verify precise point now stored
-	fetched2, _ := repo.GetByRecordKey(did, rkey)
+	fetched2, err := repo.GetByRecordKey(did, rkey)
+	if err != nil {
+		t.Fatalf("GetByRecordKey() after consent grant error = %v", err)
+	}
 	if fetched2.PrecisePoint == nil {
 		t.Error("With consent, PrecisePoint should be stored")
 	}
@@ -404,7 +410,10 @@ func TestPrivacy_Upsert_PreservesConsent(t *testing.T) {
 	}
 
 	// Verify precise point removed
-	fetched3, _ := repo.GetByRecordKey(did, rkey)
+	fetched3, err := repo.GetByRecordKey(did, rkey)
+	if err != nil {
+		t.Fatalf("GetByRecordKey() after consent revocation error = %v", err)
+	}
 	if fetched3.PrecisePoint != nil {
 		t.Errorf("Privacy violation: upsert update after consent revocation stored precise point: %+v", fetched3.PrecisePoint)
 	}
