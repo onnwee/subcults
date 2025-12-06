@@ -175,11 +175,11 @@ func (c *Client) computeBackoff() time.Duration {
 	// Exponential backoff: baseDelay * 2^attempts using bit shifting
 	// Cap the shift at 30 to prevent overflow (2^30 = ~1 billion)
 	reconnectCount := atomic.LoadInt64(&c.reconnectCount)
-	shift := reconnectCount
+	shift := uint(reconnectCount)
 	if shift > 30 {
 		shift = 30
 	}
-	backoff := float64(c.config.BaseDelay) * float64(int64(1)<<shift)
+	backoff := float64(c.config.BaseDelay) * float64(uint64(1)<<shift)
 
 	// Cap at max delay
 	if backoff > float64(c.config.MaxDelay) {
