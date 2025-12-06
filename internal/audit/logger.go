@@ -42,7 +42,7 @@ var ValidActions = map[string]bool{
 	"export_member_data":      true,
 }
 
-// validateLogEntry validates the required fields of a log entry.
+// validateLogEntry validates the required fields of a log entry against whitelists.
 func validateLogEntry(entityType, entityID, action string) error {
 	if entityType == "" {
 		return ErrInvalidEntityType
@@ -78,15 +78,27 @@ func extractIPAddress(r *http.Request) string {
 		} else {
 			firstIP = strings.TrimSpace(xff)
 		}
-		// Only use if non-empty after trimming
+		// Only use if non-empty after trimming, and strip port if present
 		if firstIP != "" {
-			return firstIP
+			host, _, err := net.SplitHostPort(firstIP)
+			if err != nil {
+				// IP might not have a port
+				return firstIP
+			}
+			return host
 		}
 	}
 	
 	// Check X-Real-IP header
 	if xri := r.Header.Get("X-Real-IP"); xri != "" {
-		return strings.TrimSpace(xri)
+		xri = strings.TrimSpace(xri)
+		// Strip port if present
+		host, _, err := net.SplitHostPort(xri)
+		if err != nil {
+			// IP might not have a port
+			return xri
+		}
+		return host
 	}
 	
 	// Fall back to RemoteAddr (strip port properly for both IPv4 and IPv6)

@@ -435,6 +435,70 @@ func TestLogAccessFromRequest_WithXRealIP(t *testing.T) {
 	}
 }
 
+func TestLogAccessFromRequest_WithXRealIPAndPort(t *testing.T) {
+	repo := NewInMemoryRepository()
+
+	// Create a test HTTP request with X-Real-IP header containing port
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/scenes/scene-890", nil)
+	req.Header.Set("X-Real-IP", "198.51.100.60:8080")
+	req.RemoteAddr = "192.168.1.100:12345"
+	
+	ctx := middleware.SetUserDID(req.Context(), "did:web:test.com:user1000")
+	req = req.WithContext(ctx)
+
+	err := LogAccessFromRequest(req, repo, "scene", "scene-890", "access_precise_location")
+	if err != nil {
+		t.Fatalf("LogAccessFromRequest() error = %v", err)
+	}
+
+	results, err := repo.QueryByEntity("scene", "scene-890", 0)
+	if err != nil {
+		t.Fatalf("QueryByEntity() error = %v", err)
+	}
+
+	if len(results) != 1 {
+		t.Fatalf("Expected 1 log entry, got %d", len(results))
+	}
+
+	log := results[0]
+	// Port should be stripped from X-Real-IP
+	if log.IPAddress != "198.51.100.60" {
+		t.Errorf("LogAccessFromRequest() IPAddress = %q, want 198.51.100.60 (port stripped from X-Real-IP)", log.IPAddress)
+	}
+}
+
+func TestLogAccessFromRequest_WithXForwardedForAndPort(t *testing.T) {
+	repo := NewInMemoryRepository()
+
+	// Create a test HTTP request with X-Forwarded-For containing port in first IP
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/scenes/scene-891", nil)
+	req.Header.Set("X-Forwarded-For", "203.0.113.200:9000, 198.51.100.178")
+	req.RemoteAddr = "192.168.1.100:12345"
+	
+	ctx := middleware.SetUserDID(req.Context(), "did:web:test.com:user1001")
+	req = req.WithContext(ctx)
+
+	err := LogAccessFromRequest(req, repo, "scene", "scene-891", "access_precise_location")
+	if err != nil {
+		t.Fatalf("LogAccessFromRequest() error = %v", err)
+	}
+
+	results, err := repo.QueryByEntity("scene", "scene-891", 0)
+	if err != nil {
+		t.Fatalf("QueryByEntity() error = %v", err)
+	}
+
+	if len(results) != 1 {
+		t.Fatalf("Expected 1 log entry, got %d", len(results))
+	}
+
+	log := results[0]
+	// Port should be stripped from first IP in X-Forwarded-For
+	if log.IPAddress != "203.0.113.200" {
+		t.Errorf("LogAccessFromRequest() IPAddress = %q, want 203.0.113.200 (port stripped from X-Forwarded-For)", log.IPAddress)
+	}
+}
+
 func TestInMemoryRepository_ThreadSafety(t *testing.T) {
 	repo := NewInMemoryRepository()
 	
