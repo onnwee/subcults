@@ -196,14 +196,8 @@ func TestIntegration_CompleteMiddlewareStack(t *testing.T) {
 			t.Error("request ID not available in handler")
 		}
 
-		// Simulate authenticated user
-		ctx := middleware.SetUserDID(r.Context(), "did:plc:test123")
-
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("Success"))
-
-		// Update the request context for logging
-		*r = *r.WithContext(ctx)
 	})
 
 	// Build middleware stack: RequestID -> Logging -> Handler
