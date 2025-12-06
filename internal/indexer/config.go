@@ -34,7 +34,7 @@ type Config struct {
 	MaxDelay time.Duration
 
 	// JitterFactor is the fraction of delay to randomize (0.0 to 1.0).
-	// A value of 0.5 means the actual delay will be in [delay*0.5, delay*1.5].
+	// A value of 0.5 means the actual delay will be in [delay*0.75, delay*1.25].
 	JitterFactor float64
 }
 

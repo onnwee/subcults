@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"math/rand"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -23,14 +24,14 @@ type Client struct {
 	config  Config
 	handler MessageHandler
 	logger  *slog.Logger
-	rng     *rand.Rand
 
 	mu          sync.Mutex
+	rng         *rand.Rand // protected by mu
 	conn        *websocket.Conn
 	isConnected bool
 
-	// reconnectCount tracks consecutive reconnection attempts
-	reconnectCount int
+	// reconnectCount tracks consecutive reconnection attempts (atomic)
+	reconnectCount int64
 }
 
 // NewClient creates a new Jetstream WebSocket client with the given configuration.
@@ -64,17 +65,18 @@ func (c *Client) Run(ctx context.Context) error {
 
 		// Attempt to connect
 		if err := c.connect(ctx); err != nil {
+			attempt := atomic.LoadInt64(&c.reconnectCount) + 1
 			c.logger.Warn("jetstream connection failed",
 				slog.String("error", err.Error()),
-				slog.Int("attempt", c.reconnectCount+1))
+				slog.Int64("attempt", attempt))
 
 			// Schedule reconnect with backoff
 			delay := c.computeBackoff()
-			c.reconnectCount++
+			atomic.AddInt64(&c.reconnectCount, 1)
 
 			c.logger.Info("scheduling reconnect",
 				slog.Duration("delay", delay),
-				slog.Int("attempt", c.reconnectCount))
+				slog.Int64("attempt", atomic.LoadInt64(&c.reconnectCount)))
 
 			select {
 			case <-ctx.Done():
@@ -85,7 +87,7 @@ func (c *Client) Run(ctx context.Context) error {
 		}
 
 		// Reset reconnect count on successful connection
-		c.reconnectCount = 0
+		atomic.StoreInt64(&c.reconnectCount, 0)
 
 		// Read messages until connection closes
 		c.readLoop(ctx)
@@ -123,7 +125,17 @@ func (c *Client) readLoop(ctx context.Context) {
 		default:
 		}
 
-		messageType, payload, err := c.conn.ReadMessage()
+		// Get connection under lock to prevent race with close()
+		c.mu.Lock()
+		conn := c.conn
+		c.mu.Unlock()
+
+		if conn == nil {
+			// Connection was closed, exit loop
+			return
+		}
+
+		messageType, payload, err := conn.ReadMessage()
 		if err != nil {
 			c.logger.Warn("jetstream connection closed",
 				slog.String("error", err.Error()))
@@ -162,7 +174,8 @@ func (c *Client) computeBackoff() time.Duration {
 
 	// Exponential backoff: baseDelay * 2^attempts using bit shifting
 	// Cap the shift at 30 to prevent overflow (2^30 = ~1 billion)
-	shift := c.reconnectCount
+	reconnectCount := atomic.LoadInt64(&c.reconnectCount)
+	shift := reconnectCount
 	if shift > 30 {
 		shift = 30
 	}

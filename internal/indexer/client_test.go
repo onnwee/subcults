@@ -241,7 +241,7 @@ func TestClient_ComputeBackoff(t *testing.T) {
 	client, _ := NewClient(config, nil, nil)
 
 	tests := []struct {
-		attempt  int
+		attempt  int64
 		expected time.Duration
 	}{
 		{attempt: 0, expected: 100 * time.Millisecond},  // 100ms * 2^0
@@ -254,7 +254,7 @@ func TestClient_ComputeBackoff(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		client.reconnectCount = tt.attempt
+		atomic.StoreInt64(&client.reconnectCount, tt.attempt)
 		got := client.computeBackoff()
 		if got != tt.expected {
 			t.Errorf("computeBackoff() with attempt=%d = %v, want %v", tt.attempt, got, tt.expected)
@@ -271,7 +271,7 @@ func TestClient_ComputeBackoff_WithJitter(t *testing.T) {
 	}
 
 	client, _ := NewClient(config, nil, nil)
-	client.reconnectCount = 0
+	atomic.StoreInt64(&client.reconnectCount, 0)
 
 	// With 50% jitter, delay should be in range [75ms, 125ms] for attempt 0
 	minExpected := 75 * time.Millisecond
