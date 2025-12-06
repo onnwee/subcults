@@ -272,7 +272,7 @@ Variables are organized into logical groups:
 
 #### Authentication & Security
 - **`JWT_SECRET`** (required) - JWT signing secret for access and refresh tokens
-  - Must be at least 32 characters
+  - Recommended: at least 32 characters
   - Generate with: `openssl rand -base64 32`
 
 #### External Services
