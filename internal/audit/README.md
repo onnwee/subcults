@@ -9,17 +9,48 @@ Audit logs record access events with:
 - Entity type and ID accessed
 - Action performed
 - Timestamp (UTC)
-- Request metadata (request ID, IP address, user agent)
+- Request metadata (request ID, IP address without port, user agent)
+
+## Privacy & Compliance Notice
+
+**⚠️ Important: PII Storage**
+
+Audit logs contain Personally Identifiable Information (PII):
+- **User DIDs**: Decentralized identifiers linking to user accounts
+- **IP Addresses**: Client IP addresses (without port numbers)
+- **User Agents**: Browser/client information
+
+### Compliance Considerations
+
+1. **Data Retention**: Audit logs should be retained according to your organization's compliance requirements (GDPR, CCPA, etc.). Implement automatic retention policies to delete old logs.
+
+2. **Access Controls**: Audit logs themselves must be protected from unauthorized access. Only authorized personnel (security, compliance, administrators) should have access.
+
+3. **Data Minimization**: Consider whether all metadata (especially user agent strings) is necessary for your compliance requirements.
+
+4. **User Rights**: Users may have rights to access, correct, or delete their audit log data under privacy regulations.
+
+5. **Error Handling**: This implementation uses a **fail-closed approach** - if audit logging fails, the request fails. This ensures compliance requirements are met but may impact availability if the audit system is down.
 
 ## Database Schema
 
 The `audit_logs` table includes:
 - Primary key: UUID
+- IP addresses stored as VARCHAR(45) to accommodate IPv4 and IPv6 without ports
 - Indexed columns for efficient querying:
   - `entity_type`, `entity_id`, `created_at` (composite index)
   - `user_did`, `created_at`
   - `action`, `created_at`
-  - `created_at` (for retention policy queries)
+
+## Input Validation
+
+All logging functions validate inputs:
+- **Entity types** must be in the allowed whitelist: `scene`, `event`, `user`, `admin_panel`, `post`
+- **Actions** must be in the allowed whitelist: `access_precise_location`, `access_coarse_location`, `view_admin_panel`, etc.
+- **Entity IDs** and **actions** cannot be empty
+- **Repository** cannot be nil
+
+Invalid inputs return specific errors: `ErrInvalidEntityType`, `ErrInvalidEntityID`, `ErrInvalidAction`, `ErrNilRepository`
 
 ## Usage Examples
 
@@ -37,12 +68,12 @@ func handlePreciseLocationAccess(ctx context.Context, repo audit.Repository) err
     err := audit.LogAccess(
         ctx,
         repo,
-        "scene",                      // entity type
+        "scene",                      // entity type (validated)
         "scene-123",                  // entity ID
-        "access_precise_location",    // action
+        "access_precise_location",    // action (validated)
     )
     if err != nil {
-        return err
+        return err  // Fail-closed: request fails if audit logging fails
     }
     
     // Continue with actual access...
@@ -56,9 +87,10 @@ func handlePreciseLocationAccess(ctx context.Context, repo audit.Repository) err
 // In an HTTP handler
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
     // Log access with full request metadata
-    // IP address handling:
-    // - Uses X-Forwarded-For header's first IP (original client) if present
-    // - Falls back to RemoteAddr if X-Forwarded-For is empty or invalid
+    // IP address extraction (consistent with rate limiting):
+    // - Checks X-Forwarded-For header first (uses first IP from comma-separated list)
+    // - Falls back to X-Real-IP header
+    // - Finally uses RemoteAddr (with port stripped for both IPv4 and IPv6)
     err := audit.LogAccessFromRequest(
         r,
         h.auditRepo,
@@ -67,7 +99,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
         "view_admin_panel",
     )
     if err != nil {
-        // Handle error...
+        // Handle error - request should fail if audit logging fails
+        http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+        return
     }
     
     // Continue with handler logic...

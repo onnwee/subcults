@@ -330,8 +330,9 @@ func TestLogAccessFromRequest(t *testing.T) {
 	if log.RequestID != "req-abc" {
 		t.Errorf("LogAccessFromRequest() RequestID = %q, want req-abc", log.RequestID)
 	}
-	if log.IPAddress != "192.168.1.100:12345" {
-		t.Errorf("LogAccessFromRequest() IPAddress = %q, want 192.168.1.100:12345", log.IPAddress)
+	// IP address should have port stripped
+	if log.IPAddress != "192.168.1.100" {
+		t.Errorf("LogAccessFromRequest() IPAddress = %q, want 192.168.1.100 (port stripped)", log.IPAddress)
 	}
 	if log.UserAgent != "TestAgent/1.0" {
 		t.Errorf("LogAccessFromRequest() UserAgent = %q, want TestAgent/1.0", log.UserAgent)
@@ -396,9 +397,41 @@ func TestLogAccessFromRequest_WithEmptyXForwardedFor(t *testing.T) {
 	}
 
 	log := results[0]
-	// Should fall back to RemoteAddr when X-Forwarded-For is empty
-	if log.IPAddress != "192.168.1.100:12345" {
-		t.Errorf("LogAccessFromRequest() IPAddress = %q, want 192.168.1.100:12345 (from RemoteAddr)", log.IPAddress)
+	// Should fall back to RemoteAddr with port stripped when X-Forwarded-For is empty
+	if log.IPAddress != "192.168.1.100" {
+		t.Errorf("LogAccessFromRequest() IPAddress = %q, want 192.168.1.100 (from RemoteAddr, port stripped)", log.IPAddress)
+	}
+}
+
+func TestLogAccessFromRequest_WithXRealIP(t *testing.T) {
+	repo := NewInMemoryRepository()
+
+	// Create a test HTTP request with X-Real-IP header
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/scenes/scene-789", nil)
+	req.Header.Set("X-Real-IP", "198.51.100.50")
+	req.RemoteAddr = "192.168.1.100:12345"
+	
+	ctx := middleware.SetUserDID(req.Context(), "did:web:test.com:user999")
+	req = req.WithContext(ctx)
+
+	err := LogAccessFromRequest(req, repo, "scene", "scene-789", "access_precise_location")
+	if err != nil {
+		t.Fatalf("LogAccessFromRequest() error = %v", err)
+	}
+
+	results, err := repo.QueryByEntity("scene", "scene-789", 0)
+	if err != nil {
+		t.Fatalf("QueryByEntity() error = %v", err)
+	}
+
+	if len(results) != 1 {
+		t.Fatalf("Expected 1 log entry, got %d", len(results))
+	}
+
+	log := results[0]
+	// X-Real-IP should be used when X-Forwarded-For is not present
+	if log.IPAddress != "198.51.100.50" {
+		t.Errorf("LogAccessFromRequest() IPAddress = %q, want 198.51.100.50 (from X-Real-IP)", log.IPAddress)
 	}
 }
 
@@ -436,5 +469,131 @@ func TestInMemoryRepository_ThreadSafety(t *testing.T) {
 
 	if len(results) != 10 {
 		t.Errorf("Expected 10 log entries after concurrent writes, got %d", len(results))
+	}
+}
+
+func TestLogAccess_NilRepository(t *testing.T) {
+	ctx := context.Background()
+	
+	err := LogAccess(ctx, nil, "scene", "scene-123", "access_precise_location")
+	if err != ErrNilRepository {
+		t.Errorf("LogAccess() with nil repo error = %v, want %v", err, ErrNilRepository)
+	}
+}
+
+func TestLogAccessFromRequest_NilRepository(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	
+	err := LogAccessFromRequest(req, nil, "scene", "scene-123", "access_precise_location")
+	if err != ErrNilRepository {
+		t.Errorf("LogAccessFromRequest() with nil repo error = %v, want %v", err, ErrNilRepository)
+	}
+}
+
+func TestLogAccess_EmptyEntityType(t *testing.T) {
+	repo := NewInMemoryRepository()
+	ctx := context.Background()
+	
+	err := LogAccess(ctx, repo, "", "scene-123", "access_precise_location")
+	if err != ErrInvalidEntityType {
+		t.Errorf("LogAccess() with empty entityType error = %v, want %v", err, ErrInvalidEntityType)
+	}
+}
+
+func TestLogAccess_InvalidEntityType(t *testing.T) {
+	repo := NewInMemoryRepository()
+	ctx := context.Background()
+	
+	err := LogAccess(ctx, repo, "invalid_type", "scene-123", "access_precise_location")
+	if err != ErrInvalidEntityType {
+		t.Errorf("LogAccess() with invalid entityType error = %v, want %v", err, ErrInvalidEntityType)
+	}
+}
+
+func TestLogAccess_EmptyEntityID(t *testing.T) {
+	repo := NewInMemoryRepository()
+	ctx := context.Background()
+	
+	err := LogAccess(ctx, repo, "scene", "", "access_precise_location")
+	if err != ErrInvalidEntityID {
+		t.Errorf("LogAccess() with empty entityID error = %v, want %v", err, ErrInvalidEntityID)
+	}
+}
+
+func TestLogAccess_EmptyAction(t *testing.T) {
+	repo := NewInMemoryRepository()
+	ctx := context.Background()
+	
+	err := LogAccess(ctx, repo, "scene", "scene-123", "")
+	if err != ErrInvalidAction {
+		t.Errorf("LogAccess() with empty action error = %v, want %v", err, ErrInvalidAction)
+	}
+}
+
+func TestLogAccess_InvalidAction(t *testing.T) {
+	repo := NewInMemoryRepository()
+	ctx := context.Background()
+	
+	err := LogAccess(ctx, repo, "scene", "scene-123", "invalid_action")
+	if err != ErrInvalidAction {
+		t.Errorf("LogAccess() with invalid action error = %v, want %v", err, ErrInvalidAction)
+	}
+}
+
+func TestLogAccessFromRequest_ValidationErrors(t *testing.T) {
+	repo := NewInMemoryRepository()
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	
+	tests := []struct {
+		name       string
+		entityType string
+		entityID   string
+		action     string
+		wantErr    error
+	}{
+		{
+			name:       "empty entity type",
+			entityType: "",
+			entityID:   "id-123",
+			action:     "access_precise_location",
+			wantErr:    ErrInvalidEntityType,
+		},
+		{
+			name:       "invalid entity type",
+			entityType: "bad_type",
+			entityID:   "id-123",
+			action:     "access_precise_location",
+			wantErr:    ErrInvalidEntityType,
+		},
+		{
+			name:       "empty entity ID",
+			entityType: "scene",
+			entityID:   "",
+			action:     "access_precise_location",
+			wantErr:    ErrInvalidEntityID,
+		},
+		{
+			name:       "empty action",
+			entityType: "scene",
+			entityID:   "id-123",
+			action:     "",
+			wantErr:    ErrInvalidAction,
+		},
+		{
+			name:       "invalid action",
+			entityType: "scene",
+			entityID:   "id-123",
+			action:     "bad_action",
+			wantErr:    ErrInvalidAction,
+		},
+	}
+	
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := LogAccessFromRequest(req, repo, tt.entityType, tt.entityID, tt.action)
+			if err != tt.wantErr {
+				t.Errorf("LogAccessFromRequest() error = %v, want %v", err, tt.wantErr)
+			}
+		})
 	}
 }

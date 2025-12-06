@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     
     -- Metadata
     request_id VARCHAR(255), -- Correlation with request logs
-    ip_address INET,
+    ip_address VARCHAR(45), -- IPv4 or IPv6 address without port
     user_agent TEXT
 );
 
@@ -23,9 +23,6 @@ CREATE INDEX idx_audit_logs_user ON audit_logs(user_did, created_at DESC);
 
 -- Index for querying by action
 CREATE INDEX idx_audit_logs_action ON audit_logs(action, created_at DESC);
-
--- Index for querying by time (for retention policies)
-CREATE INDEX idx_audit_logs_created ON audit_logs(created_at DESC);
 
 COMMENT ON TABLE audit_logs IS 'Audit trail for access to precise location and sensitive endpoints';
 COMMENT ON COLUMN audit_logs.entity_type IS 'Type of entity accessed (scene, event, user, admin_panel, etc.)';
