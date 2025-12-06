@@ -49,7 +49,7 @@ DO $$
 BEGIN
     IF EXISTS (
         SELECT 1 FROM information_schema.columns 
-        WHERE table_name = 'scenes' AND column_name = 'primary_color'
+        WHERE table_schema = 'public' AND table_name = 'scenes' AND column_name = 'primary_color'
     ) THEN
         -- Build palette JSON from existing color columns
         UPDATE scenes 
@@ -116,7 +116,7 @@ DO $$
 BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM information_schema.columns 
-        WHERE table_name = 'scenes' AND column_name = 'name_desc_tags_fts'
+        WHERE table_schema = 'public' AND table_name = 'scenes' AND column_name = 'name_desc_tags_fts'
     ) THEN
         -- Add generated tsvector column for full-text search
         -- Combines name, description, and tags array
