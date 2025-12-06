@@ -4,17 +4,27 @@ dist/
 .vite/
 .eslintcache
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
 .npm/
 .pnpm-store/
+.yarn/
 
 # Build artifacts
 *.DS_Store
 .DS_Store
 
-# Env files
-.env*
-!/.env.example
-!configs/*.env.example
+# Env files (never commit secrets)
+.env
+.env.*
+!.env.example
+!*.env.example
+configs/dev.env
+configs/prod.env
+configs/local.env
 
 # Go
 bin/
@@ -22,6 +32,7 @@ bin/
 /indexer
 /backfill
 coverage.out
+coverage.html
 *.exe
 *.exe~
 *.dll
@@ -30,6 +41,8 @@ coverage.out
 *.test
 *.out
 go.work
+go.work.sum
+vendor/
 
 # IDE
 .idea/
@@ -40,16 +53,58 @@ go.work
 .project
 .classpath
 .settings/
+*.sublime-workspace
+*.sublime-project
 
 # Docker
 *.pid
+docker-compose.override.yml
 
 # OS
 Thumbs.db
+.DS_Store
+._*
+.Spotlight-V100
+.Trashes
 
 # Temporary files
 tmp/
 temp/
 *.tmp
 *.bak
-configs/dev.env
+*.backup
+*~
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+logs/
+*.log
+
+# Testing
+.testcache/
+test-results/
+
+# Performance and profiling
+*.prof
+*.pprof
+perf/*.html
+perf/reports/
+
+# Documentation build artifacts
+docs/_build/
+docs/.buildinfo
+
+# MacOS
+.AppleDouble
+.LSOverride
+
+# Windows
+Desktop.ini
+ehthumbs.db
+
+# Linux
+.directory
