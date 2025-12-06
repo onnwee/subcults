@@ -93,6 +93,7 @@ make migrate-down
 | 000004 | users_table | Users table for core identity and ATProto DID linking. Foundation for ownership and membership relations. |
 | 000005 | events_table | Enhanced events table: title (renamed from name), tags array, status with CHECK constraint, stream_session_id FK, full-text search (FTS) on title+tags. Supports schedule-based discovery. |
 | 000006 | trust_graph_columns | Adds trust_weight (0-1) and since columns to memberships. Adds reason, status, and since columns to alliances. Indexes on weight and status for filtering. Enables trust graph computation. |
+| 000007 | audit_logs | Audit logs table for privacy-compliant access logging. Records scene/event/post access with retention policies. |
 
 ## Writing New Migrations
 
@@ -122,6 +123,7 @@ make migrate-down
 - **alliances**: Trust relationships between scenes with weight (0-1), reason, and status
 - **stream_sessions**: LiveKit audio rooms
 - **indexer_state**: Cursor tracking for Jetstream ingestion
+- **audit_logs**: Privacy-compliant access logging with retention policies
 
 ### Location Privacy
 
