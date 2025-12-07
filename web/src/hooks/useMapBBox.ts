@@ -217,7 +217,9 @@ export function useMapBBox(
         debounceTimerRef.current = null;
       }
     };
-  }, [map, immediate, handleMoveStart, handleMove, handleMoveEnd, computeAndUpdateBBox]);
+    // computeAndUpdateBBox is stable (only changes when map changes, which is in deps)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [map, immediate, handleMoveStart, handleMove, handleMoveEnd]);
   
   return {
     bbox,

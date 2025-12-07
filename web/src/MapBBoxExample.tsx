@@ -19,10 +19,11 @@ function MapBBoxExample() {
     
     // Simulate data fetch
     const timestamp = new Date().toISOString();
-    setFetchedData(prev => [
-      ...prev.slice(-4), // Keep last 5 entries
-      `Fetched data for bbox: [${bbox.map(n => n.toFixed(4)).join(', ')}] at ${timestamp}`,
-    ]);
+    // Keep last 5 entries (including the new one)
+    setFetchedData(prev => {
+      const newData = [...prev, `Fetched data for bbox: [${bbox.map(n => n.toFixed(4)).join(', ')}] at ${timestamp}`];
+      return newData.slice(-5);
+    });
   };
   
   const { bbox, loading, error } = useMapBBox(
