@@ -101,7 +101,6 @@ export function useClusteredData(
 ): UseClusteredDataResult {
   const {
     apiUrl = import.meta.env.VITE_API_URL || '/api',
-    autoFetch = false,
     debounceMs = 300,
   } = options;
 
