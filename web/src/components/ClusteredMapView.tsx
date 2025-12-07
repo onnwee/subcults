@@ -12,12 +12,6 @@ export interface ClusteredMapViewProps extends Omit<MapViewProps, 'onLoad'> {
    * Custom handler when map loads (receives map instance)
    */
   onLoad?: (map: Map) => void;
-  
-  /**
-   * Debug mode to show raw (non-jittered) coordinates
-   * Useful for QA and development
-   */
-  debugMode?: boolean;
 }
 
 /**
@@ -34,13 +28,47 @@ export interface ClusteredMapViewProps extends Omit<MapViewProps, 'onLoad'> {
  * - Respects location consent flags from backend
  * - Uses coarse geohash coordinates when precise location is not allowed
  * - Applies deterministic jitter to coarse coordinates
- * - Shows privacy notice in tooltips for jittered locations
+ * - Shows privacy notice in tooltips for jittered locations (HTML-escaped)
  */
 export function ClusteredMapView(props: ClusteredMapViewProps) {
   const mapRef = useRef<MapViewHandle>(null);
   const { data, updateBBox, loading, error } = useClusteredData(null, { debounceMs: 300 });
   const mapInstanceRef = useRef<Map | null>(null);
   const popupRef = useRef<maplibregl.Popup | null>(null);
+
+  // Helper function to show privacy tooltip for jittered markers
+  const showPrivacyTooltip = (
+    map: Map,
+    coordinates: [number, number],
+    name: string
+  ) => {
+    // Create popup if it doesn't exist
+    if (!popupRef.current) {
+      popupRef.current = new maplibregl.Popup({
+        closeButton: false,
+        closeOnClick: false,
+        offset: 15,
+      });
+    }
+    
+    // Escape HTML to prevent XSS
+    const escapedName = name
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+    
+    popupRef.current
+      .setLngLat(coordinates)
+      .setHTML(`
+        <div style="padding: 8px; font-size: 12px; line-height: 1.4;">
+          <strong>${escapedName}</strong><br/>
+          <em style="color: #666;">📍 Approximate location (privacy preserved)</em>
+        </div>
+      `)
+      .addTo(map);
+  };
 
   // Handle map load event
   const handleMapLoad = (map: Map) => {
@@ -192,27 +220,8 @@ export function ClusteredMapView(props: ClusteredMapViewProps) {
         const name = feature.properties?.name || 'Scene';
         
         if (isJittered) {
-          // Show privacy notice for jittered locations
           const coordinates = (feature.geometry as GeoJSON.Point).coordinates.slice() as [number, number];
-          
-          // Create popup if it doesn't exist
-          if (!popupRef.current) {
-            popupRef.current = new maplibregl.Popup({
-              closeButton: false,
-              closeOnClick: false,
-              offset: 15,
-            });
-          }
-          
-          popupRef.current
-            .setLngLat(coordinates)
-            .setHTML(`
-              <div style="padding: 8px; font-size: 12px; line-height: 1.4;">
-                <strong>${name}</strong><br/>
-                <em style="color: #666;">📍 Approximate location (privacy preserved)</em>
-              </div>
-            `)
-            .addTo(map);
+          showPrivacyTooltip(map, coordinates, name);
         }
       }
     });
@@ -234,27 +243,8 @@ export function ClusteredMapView(props: ClusteredMapViewProps) {
         const name = feature.properties?.name || 'Event';
         
         if (isJittered) {
-          // Show privacy notice for jittered locations
           const coordinates = (feature.geometry as GeoJSON.Point).coordinates.slice() as [number, number];
-          
-          // Create popup if it doesn't exist
-          if (!popupRef.current) {
-            popupRef.current = new maplibregl.Popup({
-              closeButton: false,
-              closeOnClick: false,
-              offset: 15,
-            });
-          }
-          
-          popupRef.current
-            .setLngLat(coordinates)
-            .setHTML(`
-              <div style="padding: 8px; font-size: 12px; line-height: 1.4;">
-                <strong>${name}</strong><br/>
-                <em style="color: #666;">📍 Approximate location (privacy preserved)</em>
-              </div>
-            `)
-            .addTo(map);
+          showPrivacyTooltip(map, coordinates, name);
         }
       }
     });
