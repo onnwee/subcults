@@ -58,8 +58,9 @@ export function calculateJitterOffset(
   const hash2 = simpleHash(entityId + '-lng');
   
   // Convert hashes to normalized values [0, 1)
-  const norm1 = hash1 / 0xffffffff;
-  const norm2 = hash2 / 0xffffffff;
+  // Use Math.pow(2, 32) to ensure proper normalization of 32-bit unsigned integers
+  const norm1 = hash1 / Math.pow(2, 32);
+  const norm2 = hash2 / Math.pow(2, 32);
   
   // Use polar coordinates to ensure uniform distribution within circle
   // Convert to [0, 2π) for angle and [0, 1) for radius
