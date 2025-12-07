@@ -70,16 +70,24 @@ export function calculateJitterOffset(
   const offsetXMeters = radius * Math.cos(angle);
   const offsetYMeters = radius * Math.sin(angle);
   
-  // Convert meters to degrees (approximate, will be refined with actual lat)
+  // Convert meters to degrees
+  // NOTE: Latitude conversion is straightforward (constant ~111,320 m/deg)
   const latOffset = offsetYMeters / METERS_PER_DEGREE_LAT;
-  const lngOffset = offsetXMeters / METERS_PER_DEGREE_LAT; // Temporary, will scale by latitude
   
-  return { latOffset, lngOffset };
+  // Longitude: Use equatorial conversion as base (will be scaled by cos(lat) in applyJitter)
+  // This allows calculateJitterOffset to be latitude-independent while still deterministic
+  const lngOffsetBase = offsetXMeters / METERS_PER_DEGREE_LAT;
+  
+  return { latOffset, lngOffset: lngOffsetBase };
 }
 
 /**
  * Apply jitter offset to coordinates
- * Adjusts longitude offset based on latitude for accurate distance preservation
+ * Scales base longitude offset by latitude to maintain consistent distance
+ * 
+ * The longitude offset from calculateJitterOffset uses equatorial meters/degree
+ * as a base value. This function scales it by 1/cos(latitude) to maintain
+ * the correct distance in meters at the given latitude.
  * 
  * @param lat - Original latitude
  * @param lng - Original longitude
@@ -95,7 +103,9 @@ export function applyJitter(
 ): { lat: number; lng: number } {
   const { latOffset, lngOffset } = calculateJitterOffset(entityId, radiusMeters);
   
-  // Scale longitude offset by latitude to maintain consistent distance
+  // Scale longitude offset to account for latitude
+  // At equator: cos(0°) = 1.0, no scaling needed
+  // At 60° lat: cos(60°) = 0.5, double the offset to maintain distance
   const scaledLngOffset = lngOffset / Math.cos((lat * Math.PI) / 180);
   
   return {
