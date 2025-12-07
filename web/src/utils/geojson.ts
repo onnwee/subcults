@@ -1,5 +1,6 @@
 import type { Scene, Event, Point } from '../types/scene';
 import type { FeatureCollection, Feature, Point as GeoJSONPoint } from 'geojson';
+import { applyJitter, shouldApplyJitter } from './jitter';
 
 /**
  * Properties for a scene or event feature in GeoJSON
@@ -17,6 +18,7 @@ export interface FeatureProperties {
     primary: string;
     secondary: string;
   };
+  is_jittered?: boolean; // Indicates if coordinates have privacy jitter applied
 }
 
 /**
@@ -112,20 +114,29 @@ export function getDisplayCoordinates(entity: Scene | Event): Point {
 /**
  * Build a GeoJSON FeatureCollection from scenes and events
  * Respects location privacy by using coarse geohash when precise location is not allowed
+ * Applies deterministic jitter to coarse coordinates for privacy visualization
  * 
  * @param scenes - Array of Scene entities
  * @param events - Array of Event entities
+ * @param enableJitter - Whether to apply jitter to coarse coordinates (default: true)
  * @returns GeoJSON FeatureCollection with features for all entities
  */
 export function buildGeoJSON(
   scenes: Scene[] = [],
-  events: Event[] = []
+  events: Event[] = [],
+  enableJitter: boolean = true
 ): FeatureCollection<GeoJSONPoint, FeatureProperties> {
   const features: Feature<GeoJSONPoint, FeatureProperties>[] = [];
 
   // Add scene features
   for (const scene of scenes) {
-    const coords = getDisplayCoordinates(scene);
+    let coords = getDisplayCoordinates(scene);
+    const applyJitterToCoords = enableJitter && shouldApplyJitter(scene.allow_precise);
+    
+    // Apply jitter to coarse coordinates for privacy visualization
+    if (applyJitterToCoords) {
+      coords = applyJitter(coords.lat, coords.lng, scene.id);
+    }
     
     features.push({
       type: 'Feature',
@@ -142,13 +153,20 @@ export function buildGeoJSON(
         tags: scene.tags,
         visibility: scene.visibility,
         palette: scene.palette,
+        is_jittered: applyJitterToCoords,
       },
     });
   }
 
   // Add event features
   for (const event of events) {
-    const coords = getDisplayCoordinates(event);
+    let coords = getDisplayCoordinates(event);
+    const applyJitterToCoords = enableJitter && shouldApplyJitter(event.allow_precise);
+    
+    // Apply jitter to coarse coordinates for privacy visualization
+    if (applyJitterToCoords) {
+      coords = applyJitter(coords.lat, coords.lng, event.id);
+    }
     
     features.push({
       type: 'Feature',
@@ -162,6 +180,7 @@ export function buildGeoJSON(
         name: event.name,
         description: event.description,
         scene_id: event.scene_id,
+        is_jittered: applyJitterToCoords,
       },
     });
   }
