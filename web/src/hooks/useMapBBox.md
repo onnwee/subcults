@@ -20,7 +20,8 @@ The `useMapBBox` hook captures map movement events from a MapLibre GL map instan
 ### Basic Example
 
 ```tsx
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
+import type { Map } from 'maplibre-gl';
 import { MapView, type MapViewHandle } from '../components/MapView';
 import { useMapBBox } from '../hooks/useMapBBox';
 
@@ -55,8 +56,9 @@ function MapWithBBox() {
 
 ```tsx
 import { useRef, useState } from 'react';
+import type { Map } from 'maplibre-gl';
 import { MapView, type MapViewHandle } from '../components/MapView';
-import { useMapBBox } from '../hooks/useMapBBox';
+import { useMapBBox, type BBoxArray } from '../hooks/useMapBBox';
 import { fetchScenesInBBox, fetchEventsInBBox } from '../services/api';
 
 function MapWithDataFetch() {
@@ -85,7 +87,7 @@ function MapWithDataFetch() {
       setScenes(scenesData);
       setEvents(eventsData);
     } catch (error) {
-      if (error.name !== 'AbortError') {
+      if (error instanceof Error && error.name !== 'AbortError') {
         console.error('Failed to fetch data:', error);
       }
     }
@@ -116,9 +118,10 @@ function MapWithDataFetch() {
 
 ```tsx
 import { useRef, useState } from 'react';
+import type { Map } from 'maplibre-gl';
 import { MapView, type MapViewHandle } from '../components/MapView';
 import { useMapBBox, type BBoxArray } from '../hooks/useMapBBox';
-import { useClusteredData, boundsToBox } from '../hooks/useClusteredData';
+import { useClusteredData } from '../hooks/useClusteredData';
 
 function MapWithClustering() {
   const mapRef = useRef<MapViewHandle>(null);
@@ -142,7 +145,7 @@ function MapWithClustering() {
       };
       updateBBox(bboxObj);
     },
-    { debounceMs: 300 }
+    { debounceMs: 0 } // No debounce here, useClusteredData handles it
   );
   
   return (
