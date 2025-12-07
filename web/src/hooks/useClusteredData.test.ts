@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach} from 'vitest';
 import { renderHook, waitFor, act } from '@testing-library/react';
 import { useClusteredData, boundsToBox } from './useClusteredData';
 import type { Scene, Event } from '../types/scene';
+import type { LngLatBounds } from 'maplibre-gl';
 
 // Mock fetch
 const mockFetch = vi.fn();
@@ -14,9 +15,9 @@ describe('boundsToBox', () => {
       getSouth: () => 37.7,
       getEast: () => -122.4,
       getWest: () => -122.5,
-    };
+    } as LngLatBounds;
 
-    const result = boundsToBox(mockBounds as any);
+    const result = boundsToBox(mockBounds);
     
     expect(result).toEqual({
       north: 37.8,
