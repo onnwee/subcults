@@ -263,4 +263,108 @@ describe('buildGeoJSON', () => {
     expect(feature.properties.visibility).toBe('unlisted');
     expect(feature.properties.palette).toEqual({ primary: '#ff0000', secondary: '#00ff00' });
   });
+
+  it('applies jitter to coarse coordinates by default', () => {
+    const scenes: Scene[] = [
+      {
+        id: 'scene-jitter',
+        name: 'Scene with Coarse Location',
+        allow_precise: false,
+        precise_point: { lat: 37.7749, lng: -122.4194 },
+        coarse_geohash: '9q8yy',
+      },
+    ];
+
+    const result = buildGeoJSON(scenes, []);
+    const feature = result.features[0];
+    
+    // Should have jitter applied
+    expect(feature.properties.is_jittered).toBe(true);
+    
+    // Get coordinates with and without jitter to verify difference
+    const resultNoJitter = buildGeoJSON(scenes, [], false);
+    const coordsWithJitter = feature.geometry.coordinates;
+    const coordsNoJitter = resultNoJitter.features[0].geometry.coordinates;
+    
+    // Coordinates should be different when jitter is applied
+    expect(coordsWithJitter).not.toEqual(coordsNoJitter);
+  });
+
+  it('does not apply jitter to precise coordinates', () => {
+    const scenes: Scene[] = [
+      {
+        id: 'scene-precise',
+        name: 'Scene with Precise Location',
+        allow_precise: true,
+        precise_point: { lat: 37.7749, lng: -122.4194 },
+        coarse_geohash: '9q8yy',
+      },
+    ];
+
+    const result = buildGeoJSON(scenes, []);
+    const feature = result.features[0];
+    
+    // Should NOT have jitter applied
+    expect(feature.properties.is_jittered).toBe(false);
+    
+    // Coordinates should match precise point exactly
+    expect(feature.geometry.coordinates).toEqual([-122.4194, 37.7749]);
+  });
+
+  it('applies consistent jitter for same entity ID across calls', () => {
+    const scene: Scene = {
+      id: 'scene-consistent',
+      name: 'Consistent Scene',
+      allow_precise: false,
+      coarse_geohash: '9q8yy',
+    };
+
+    const result1 = buildGeoJSON([scene], []);
+    const result2 = buildGeoJSON([scene], []);
+    
+    const coords1 = result1.features[0].geometry.coordinates;
+    const coords2 = result2.features[0].geometry.coordinates;
+    
+    // Same scene should produce identical jittered coordinates
+    expect(coords1).toEqual(coords2);
+  });
+
+  it('respects enableJitter parameter', () => {
+    const scene: Scene = {
+      id: 'scene-no-jitter',
+      name: 'Scene Without Jitter',
+      allow_precise: false,
+      coarse_geohash: '9q8yy',
+    };
+
+    const resultWithJitter = buildGeoJSON([scene], [], true);
+    const resultWithoutJitter = buildGeoJSON([scene], [], false);
+    
+    // With jitter enabled
+    expect(resultWithJitter.features[0].properties.is_jittered).toBe(true);
+    
+    // With jitter disabled
+    expect(resultWithoutJitter.features[0].properties.is_jittered).toBe(false);
+    
+    // Coordinates should differ when jitter is toggled
+    const coordsWithJitter = resultWithJitter.features[0].geometry.coordinates;
+    const coordsWithoutJitter = resultWithoutJitter.features[0].geometry.coordinates;
+    expect(coordsWithJitter).not.toEqual(coordsWithoutJitter);
+  });
+
+  it('applies jitter to events with coarse locations', () => {
+    const event: Event = {
+      id: 'event-jitter',
+      scene_id: 'scene1',
+      name: 'Event with Coarse Location',
+      allow_precise: false,
+      coarse_geohash: '9q8yy',
+    };
+
+    const result = buildGeoJSON([], [event]);
+    const feature = result.features[0];
+    
+    expect(feature.properties.is_jittered).toBe(true);
+    expect(feature.properties.type).toBe('event');
+  });
 });
