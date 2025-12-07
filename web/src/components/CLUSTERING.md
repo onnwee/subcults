@@ -214,8 +214,24 @@ Both endpoints should return data within the specified bounding box.
 
 1. **Location Consent**: Always respect `allow_precise` flag
 2. **Coarse Geohash**: Use for privacy-conscious discovery
-3. **No Tracking**: User location requests are opt-in only
-4. **HTTPS**: All API requests must use secure transport
+3. **Jitter Visualization**: Deterministic random offset applied to coarse coordinates
+   - 250m default radius for privacy protection
+   - Consistent per-entity across sessions
+   - Visual indicator with tooltip: "Approximate location (privacy preserved)"
+   - Subtle opacity difference (0.8 vs 1.0) for jittered markers
+4. **No Tracking**: User location requests are opt-in only
+5. **HTTPS**: All API requests must use secure transport
+
+### Jitter Implementation
+
+See `web/src/utils/JITTER.md` for detailed documentation on privacy-preserving location visualization.
+
+Key features:
+- **Deterministic**: Same entity always gets same offset (no flickering)
+- **Bounded**: Guaranteed within 250m radius (configurable)
+- **Privacy-aware**: Only applied when `allow_precise=false`
+- **Toggleable**: Can be disabled via `enableJitter` parameter
+- **Visual feedback**: Tooltips explain approximate locations
 
 ## Future Enhancements
 
@@ -224,6 +240,7 @@ Both endpoints should return data within the specified bounding box.
 - **Custom icons**: SVG markers for different scene types
 - **Heatmap mode**: Density visualization alternative
 - **Saved views**: Persist user's favorite map areas
+- **Debug mode**: Toggle to show raw vs jittered coordinates for QA
 
 ## Troubleshooting
 
@@ -244,6 +261,8 @@ Both endpoints should return data within the specified bounding box.
 
 - Verify all entities call `EnforceLocationConsent()` before persistence
 - Check geohash decoding produces approximate (not exact) coordinates
+- Ensure jitter is applied to coarse coordinates (check `is_jittered` flag)
+- Verify tooltips show privacy notice for jittered markers
 - Audit API responses for PII leakage
 
 ## References
