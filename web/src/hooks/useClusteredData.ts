@@ -116,6 +116,9 @@ export function useClusteredData(
   const abortControllerRef = useRef<AbortController | null>(null);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Counter for unique performance mark IDs
+  const fetchCounterRef = useRef(0);
+
   const fetchData = useCallback(async (currentBBox: BBox | null) => {
     // Cancel any pending fetch
     if (abortControllerRef.current) {
@@ -132,6 +135,10 @@ export function useClusteredData(
 
     const controller = new AbortController();
     abortControllerRef.current = controller;
+
+    // Performance mark: Start data fetch
+    const fetchId = `data-fetch-${++fetchCounterRef.current}`;
+    performance.mark(`${fetchId}-start`);
 
     try {
       // Build query parameters
@@ -158,11 +165,30 @@ export function useClusteredData(
       const scenes: Scene[] = await scenesRes.json();
       const events: Event[] = await eventsRes.json();
 
+      // Performance mark: Start GeoJSON build
+      performance.mark(`${fetchId}-geojson-start`);
+
       // Build GeoJSON from entities
       const geojson = buildGeoJSON(scenes, events);
       
+      // Performance mark: Complete GeoJSON build
+      performance.mark(`${fetchId}-geojson-end`);
+      performance.measure(`${fetchId}-geojson-build`, `${fetchId}-geojson-start`, `${fetchId}-geojson-end`);
+      
       setData(geojson);
       setError(null);
+
+      // Performance mark: Complete data fetch
+      performance.mark(`${fetchId}-end`);
+      performance.measure(`${fetchId}-total`, `${fetchId}-start`, `${fetchId}-end`);
+
+      // Log performance metrics
+      const totalMeasure = performance.getEntriesByName(`${fetchId}-total`)[0] as PerformanceMeasure;
+      const geojsonMeasure = performance.getEntriesByName(`${fetchId}-geojson-build`)[0] as PerformanceMeasure;
+      
+      if (totalMeasure && geojsonMeasure) {
+        console.log(`[Performance] Data fetch: ${totalMeasure.duration.toFixed(2)}ms (GeoJSON build: ${geojsonMeasure.duration.toFixed(2)}ms)`);
+      }
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') {
         // Fetch was cancelled, ignore

@@ -40,6 +40,11 @@ export const ClusteredMapView = forwardRef<MapViewHandle, ClusteredMapViewProps>
   const mapInstanceRef = useRef<MapLibreMap | null>(null);
   const popupRef = useRef<maplibregl.Popup | null>(null);
   
+  // Counters for unique performance mark IDs
+  const initCounterRef = useRef(0);
+  const updateCounterRef = useRef(0);
+  const renderCounterRef = useRef(0);
+  
   // Detail panel state
   const [selectedEntity, setSelectedEntity] = useState<Scene | Event | null>(null);
   const [panelLoading, setPanelLoading] = useState(false);
@@ -148,6 +153,10 @@ export const ClusteredMapView = forwardRef<MapViewHandle, ClusteredMapViewProps>
 
   // Handle map load event
   const handleMapLoad = (map: MapLibreMap) => {
+    // Performance mark: Start map initialization
+    const initId = `map-init-${++initCounterRef.current}`;
+    performance.mark(`${initId}-start`);
+
     mapInstanceRef.current = map;
 
     // Remove placeholder source and layers
@@ -379,6 +388,15 @@ export const ClusteredMapView = forwardRef<MapViewHandle, ClusteredMapViewProps>
     const bounds = map.getBounds();
     updateBBox(boundsToBox(bounds));
 
+    // Performance mark: Complete map initialization
+    performance.mark(`${initId}-end`);
+    performance.measure(`${initId}-duration`, `${initId}-start`, `${initId}-end`);
+
+    const measure = performance.getEntriesByName(`${initId}-duration`)[0] as PerformanceMeasure;
+    if (measure) {
+      console.log(`[Performance] Map initialization: ${measure.duration.toFixed(2)}ms`);
+    }
+
     // Call custom onLoad handler if provided
     if (props.onLoad) {
       props.onLoad(map);
@@ -392,8 +410,28 @@ export const ClusteredMapView = forwardRef<MapViewHandle, ClusteredMapViewProps>
 
     const source = map.getSource('scenes-events');
     if (source && 'setData' in source) {
+      // Performance mark: Start source update
+      const updateId = `source-update-${++updateCounterRef.current}`;
+      performance.mark(`${updateId}-start`);
+
       // Cast to GeoJSONSource - setData is defined on the type
       (source as GeoJSONSource).setData(data);
+
+      // Performance mark: Complete source update
+      performance.mark(`${updateId}-end`);
+      performance.measure(`${updateId}-duration`, `${updateId}-start`, `${updateId}-end`);
+
+      const measure = performance.getEntriesByName(`${updateId}-duration`)[0] as PerformanceMeasure;
+      if (measure) {
+        console.log(`[Performance] Map source update: ${measure.duration.toFixed(2)}ms (${data.features.length} features)`);
+      }
+
+      // Schedule render complete detection
+      requestAnimationFrame(() => {
+        const renderId = `render-complete-${++renderCounterRef.current}`;
+        performance.mark(renderId);
+        console.log(`[Performance] Layer render complete`);
+      });
     }
   }, [data]);
 
