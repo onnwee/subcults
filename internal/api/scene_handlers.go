@@ -3,6 +3,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"html"
 	"log/slog"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/onnwee/subcults/internal/color"
 	"github.com/onnwee/subcults/internal/middleware"
 	"github.com/onnwee/subcults/internal/scene"
 )
@@ -47,6 +49,11 @@ type UpdateSceneRequest struct {
 	Palette      *scene.Palette   `json:"palette,omitempty"`
 	AllowPrecise *bool            `json:"allow_precise,omitempty"`
 	PrecisePoint *scene.Point     `json:"precise_point,omitempty"`
+}
+
+// UpdateScenePaletteRequest represents the request body for updating scene palette.
+type UpdateScenePaletteRequest struct {
+	Palette scene.Palette `json:"palette"`
 }
 
 // SceneHandlers holds dependencies for scene HTTP handlers.
@@ -359,4 +366,132 @@ func (h *SceneHandlers) DeleteScene(w http.ResponseWriter, r *http.Request) {
 
 	// Return success with no content
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// UpdateScenePalette handles PATCH /scenes/{id}/palette - updates scene color palette.
+func (h *SceneHandlers) UpdateScenePalette(w http.ResponseWriter, r *http.Request) {
+	// Extract scene ID from URL path
+	pathParts := strings.Split(strings.TrimPrefix(r.URL.Path, "/scenes/"), "/")
+	if len(pathParts) < 2 || pathParts[0] == "" {
+		ctx := middleware.SetErrorCode(r.Context(), ErrCodeBadRequest)
+		WriteError(w, ctx, http.StatusBadRequest, ErrCodeBadRequest, "Scene ID is required")
+		return
+	}
+	sceneID := pathParts[0]
+
+	// Parse request body
+	var req UpdateScenePaletteRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		ctx := middleware.SetErrorCode(r.Context(), ErrCodeBadRequest)
+		WriteError(w, ctx, http.StatusBadRequest, ErrCodeBadRequest, "Invalid JSON in request body")
+		return
+	}
+
+	// Get existing scene first to check ownership
+	existingScene, err := h.repo.GetByID(sceneID)
+	if err != nil {
+		if err == scene.ErrSceneNotFound {
+			ctx := middleware.SetErrorCode(r.Context(), ErrCodeNotFound)
+			WriteError(w, ctx, http.StatusNotFound, ErrCodeNotFound, "Scene not found")
+			return
+		}
+		slog.ErrorContext(r.Context(), "failed to retrieve scene", "error", err, "scene_id", sceneID)
+		ctx := middleware.SetErrorCode(r.Context(), ErrCodeInternal)
+		WriteError(w, ctx, http.StatusInternalServerError, ErrCodeInternal, "Failed to retrieve scene")
+		return
+	}
+
+	// Authorization: Only the owner can update the palette
+	userDID := middleware.GetUserDID(r.Context())
+	if userDID == "" {
+		ctx := middleware.SetErrorCode(r.Context(), ErrCodeAuthFailed)
+		WriteError(w, ctx, http.StatusUnauthorized, ErrCodeAuthFailed, "Authentication required")
+		return
+	}
+	if existingScene.OwnerDID != userDID {
+		ctx := middleware.SetErrorCode(r.Context(), ErrCodeForbidden)
+		WriteError(w, ctx, http.StatusForbidden, ErrCodeForbidden, "Forbidden: you do not own this scene")
+		return
+	}
+
+	// Define color fields in deterministic order for consistent validation
+	type colorField struct {
+		name  string
+		value *string // Pointer to the palette field
+	}
+	colorFields := []colorField{
+		{"primary", &req.Palette.Primary},
+		{"secondary", &req.Palette.Secondary},
+		{"accent", &req.Palette.Accent},
+		{"background", &req.Palette.Background},
+		{"text", &req.Palette.Text},
+	}
+
+	// Validate and sanitize all color fields
+	for _, field := range colorFields {
+		// Check if field is provided
+		if strings.TrimSpace(*field.value) == "" {
+			ctx := middleware.SetErrorCode(r.Context(), ErrCodeInvalidPalette)
+			WriteError(w, ctx, http.StatusBadRequest, ErrCodeInvalidPalette, field.name+" color is required")
+			return
+		}
+
+		// Sanitize to prevent script injection (also validates hex format)
+		sanitized := color.SanitizeColor(*field.value)
+		if sanitized == "" {
+			ctx := middleware.SetErrorCode(r.Context(), ErrCodeInvalidPalette)
+			WriteError(w, ctx, http.StatusBadRequest, ErrCodeInvalidPalette, field.name+" color: invalid hex color format, expected #RRGGBB")
+			return
+		}
+
+		// Update the palette with sanitized value
+		*field.value = sanitized
+	}
+
+	// Validate contrast ratio between text and background (WCAG AA minimum 4.5:1)
+	ratio, err := color.ValidateContrast(req.Palette.Text, req.Palette.Background)
+	if err != nil {
+		ctx := middleware.SetErrorCode(r.Context(), ErrCodeInvalidPalette)
+		if ratio > 0 {
+			msg := fmt.Sprintf("Insufficient contrast between text and background colors (got %s:1, need 4.5:1 minimum for WCAG AA)", 
+				formatRatio(ratio))
+			WriteError(w, ctx, http.StatusBadRequest, ErrCodeInvalidPalette, msg)
+		} else {
+			WriteError(w, ctx, http.StatusBadRequest, ErrCodeInvalidPalette, err.Error())
+		}
+		return
+	}
+
+	// Update palette
+	existingScene.Palette = &req.Palette
+
+	// Update timestamp
+	now := time.Now()
+	existingScene.UpdatedAt = &now
+
+	// Update in repository
+	if err := h.repo.Update(existingScene); err != nil {
+		slog.ErrorContext(r.Context(), "failed to update scene palette", "error", err, "scene_id", sceneID)
+		ctx := middleware.SetErrorCode(r.Context(), ErrCodeInternal)
+		WriteError(w, ctx, http.StatusInternalServerError, ErrCodeInternal, "Failed to update scene palette")
+		return
+	}
+
+	// Return updated scene
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(existingScene); err != nil {
+		return
+	}
+}
+
+// formatRatio formats a contrast ratio to 1 decimal place, removing trailing zeros.
+// Examples: 4.5 -> "4.5", 4.0 -> "4", 21.0 -> "21"
+func formatRatio(ratio float64) string {
+	formatted := fmt.Sprintf("%.1f", ratio)
+	// Remove trailing zeros after decimal point
+	formatted = strings.TrimRight(formatted, "0")
+	// Remove decimal point if no fractional part remains
+	formatted = strings.TrimRight(formatted, ".")
+	return formatted
 }
