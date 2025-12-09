@@ -49,6 +49,9 @@ type SessionRepository interface {
 
 	// GetByRecordKey retrieves a session by its AT Protocol record key.
 	GetByRecordKey(did, rkey string) (*Session, error)
+	
+	// HasActiveStreamForScene checks if there's an active stream (ended_at IS NULL) for the given scene.
+	HasActiveStreamForScene(sceneID string) (bool, error)
 }
 
 // InMemorySessionRepository is an in-memory implementation of SessionRepository.
@@ -162,4 +165,17 @@ func (r *InMemorySessionRepository) GetByRecordKey(did, rkey string) (*Session, 
 	session := r.sessions[id]
 	sessionCopy := *session
 	return &sessionCopy, nil
+}
+
+// HasActiveStreamForScene checks if there's an active stream (ended_at IS NULL) for the given scene.
+func (r *InMemorySessionRepository) HasActiveStreamForScene(sceneID string) (bool, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	for _, session := range r.sessions {
+		if session.SceneID != nil && *session.SceneID == sceneID && session.EndedAt == nil {
+			return true, nil
+		}
+	}
+	return false, nil
 }
