@@ -8,9 +8,14 @@ import { renderHook, waitFor, act } from '@testing-library/react';
 import { authStore, useAuth } from './authStore';
 
 describe('authStore', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     // Reset auth state
-    authStore.logout();
+    // Mock fetch to prevent actual API calls during reset
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+    });
+    await authStore.logout();
     vi.clearAllMocks();
   });
 
@@ -197,8 +202,13 @@ describe('authStore', () => {
 });
 
 describe('useAuth hook', () => {
-  beforeEach(() => {
-    authStore.logout();
+  beforeEach(async () => {
+    // Mock fetch to prevent actual API calls during reset
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+    });
+    await authStore.logout();
     vi.clearAllMocks();
   });
 
@@ -269,8 +279,13 @@ describe('useAuth hook', () => {
 });
 
 describe('Token refresh with exponential backoff', () => {
-  beforeEach(() => {
-    authStore.logout();
+  beforeEach(async () => {
+    // Mock fetch to prevent actual API calls during reset
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+    });
+    await authStore.logout();
     vi.clearAllMocks();
     vi.useFakeTimers();
   });
