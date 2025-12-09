@@ -59,7 +59,7 @@ export const authStore = {
  * React hook for accessing auth state
  */
 export const useAuth = () => {
-  const [state, setState] = useState(authState);
+  const [state, setState] = useState(() => authStore.getState());
 
   useEffect(() => {
     const unsubscribe = authStore.subscribe(setState);
