@@ -1735,7 +1735,9 @@ CoarseGeohash: "dr5regw",
 CreatedAt:     &now,
 UpdatedAt:     &now,
 }
-repo.Insert(testScene)
+if err := repo.Insert(testScene); err != nil {
+    t.Fatalf("failed to insert test scene: %v", err)
+}
 
 // Delete once successfully
 req1 := httptest.NewRequest(http.MethodDelete, "/scenes/test-scene-id", nil)
