@@ -406,11 +406,8 @@ func (h *EventHandlers) GetEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Privacy enforcement: hide precise_point if consent is not given
-	// The repository already enforces this, but we apply it again for clarity
-	if !foundEvent.AllowPrecise {
-		foundEvent.PrecisePoint = nil
-	}
+	// Privacy enforcement is handled by the repository
+	// The repository automatically enforces location consent via EnforceLocationConsent()
 
 	// Return event
 	w.Header().Set("Content-Type", "application/json")
