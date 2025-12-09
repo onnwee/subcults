@@ -38,6 +38,9 @@ const (
 
 	// ErrCodeInvalidPalette indicates an invalid palette configuration.
 	ErrCodeInvalidPalette = "invalid_palette"
+
+	// ErrCodeSceneDeleted indicates the scene has been deleted.
+	ErrCodeSceneDeleted = "scene_deleted"
 )
 
 // ErrorResponse represents the standard error response format.
