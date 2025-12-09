@@ -70,8 +70,12 @@ func main() {
 	})
 
 	mux.HandleFunc("/events/", func(w http.ResponseWriter, r *http.Request) {
-		// Check if this is a cancel request
-		if strings.HasSuffix(r.URL.Path, "/cancel") && r.Method == http.MethodPost {
+		// Parse path to check for cancel endpoint
+		// Expected patterns: /events/{id} or /events/{id}/cancel
+		pathParts := strings.Split(strings.TrimPrefix(r.URL.Path, "/events/"), "/")
+		
+		// Check if this is a cancel request: /events/{id}/cancel
+		if len(pathParts) == 2 && pathParts[1] == "cancel" && r.Method == http.MethodPost {
 			eventHandlers.CancelEvent(w, r)
 			return
 		}
