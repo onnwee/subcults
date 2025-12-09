@@ -60,16 +60,30 @@ type Scene struct {
 // Event represents an event within a scene with optional precise location data.
 // The precise_point field is only persisted when allow_precise consent is true.
 type Event struct {
-	ID           string `json:"id"`
-	SceneID      string `json:"scene_id"`
-	Name         string `json:"name"`
-	Description  string `json:"description,omitempty"`
-	AllowPrecise bool   `json:"allow_precise"`
-	PrecisePoint *Point `json:"precise_point,omitempty"`
+	ID            string     `json:"id"`
+	SceneID       string     `json:"scene_id"`
+	Title         string     `json:"title"`         // Event title (renamed from Name per migration)
+	Description   string     `json:"description,omitempty"`
+	AllowPrecise  bool       `json:"allow_precise"`
+	PrecisePoint  *Point     `json:"precise_point,omitempty"`
+	CoarseGeohash string     `json:"coarse_geohash"` // Required for location-based discovery
+	Tags          []string   `json:"tags,omitempty"`
+	Status        string     `json:"status,omitempty"` // scheduled, live, ended, cancelled
+	StartsAt      time.Time  `json:"starts_at"`
+	EndsAt        *time.Time `json:"ends_at,omitempty"`
+	
+	// Timestamps
+	CreatedAt   *time.Time `json:"created_at,omitempty"`
+	UpdatedAt   *time.Time `json:"updated_at,omitempty"`
+	DeletedAt   *time.Time `json:"deleted_at,omitempty"`
+	CancelledAt *time.Time `json:"cancelled_at,omitempty"`
 	
 	// AT Protocol record tracking
 	RecordDID  *string `json:"record_did,omitempty"`
 	RecordRKey *string `json:"record_rkey,omitempty"`
+	
+	// LiveKit streaming
+	StreamSessionID *string `json:"stream_session_id,omitempty"`
 }
 
 // EnforceLocationConsent clears PrecisePoint if AllowPrecise is false.
