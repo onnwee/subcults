@@ -26,8 +26,9 @@ const (
 	MaxSceneNameLength = 64
 )
 
-// sceneNamePattern allows letters, numbers, spaces, and limited punctuation
-var sceneNamePattern = regexp.MustCompile(`^[a-zA-Z0-9\s\-_'.&]+$`)
+// sceneNamePattern allows letters, numbers, spaces, dash, underscore, and period only
+// Matches issue requirement: ^[A-Za-z0-9 _\-\.]{3,64}$
+var sceneNamePattern = regexp.MustCompile(`^[A-Za-z0-9 _\-\.]+$`)
 
 // CreateSceneRequest represents the request body for creating a scene.
 type CreateSceneRequest struct {
@@ -88,7 +89,7 @@ func validateSceneName(name string) string {
 		return "scene name must not exceed 64 characters"
 	}
 	if !sceneNamePattern.MatchString(trimmed) {
-		return "scene name contains invalid characters (allowed: letters, numbers, spaces, -, _, ', ., &)"
+		return "scene name contains invalid characters (allowed: letters, numbers, spaces, -, _, .)"
 	}
 	return ""
 }
@@ -121,8 +122,8 @@ func (h *SceneHandlers) CreateScene(w http.ResponseWriter, r *http.Request) {
 
 	// Validate name
 	if errMsg := validateSceneName(req.Name); errMsg != "" {
-		ctx := middleware.SetErrorCode(r.Context(), ErrCodeValidation)
-		WriteError(w, ctx, http.StatusBadRequest, ErrCodeValidation, errMsg)
+		ctx := middleware.SetErrorCode(r.Context(), ErrCodeInvalidSceneName)
+		WriteError(w, ctx, http.StatusBadRequest, ErrCodeInvalidSceneName, errMsg)
 		return
 	}
 
@@ -164,8 +165,8 @@ func (h *SceneHandlers) CreateScene(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if exists {
-		ctx := middleware.SetErrorCode(r.Context(), ErrCodeConflict)
-		WriteError(w, ctx, http.StatusConflict, ErrCodeConflict, "Scene with this name already exists for this owner")
+		ctx := middleware.SetErrorCode(r.Context(), ErrCodeDuplicateSceneName)
+		WriteError(w, ctx, http.StatusConflict, ErrCodeDuplicateSceneName, "Scene with this name already exists for this owner")
 		return
 	}
 
@@ -378,8 +379,8 @@ func (h *SceneHandlers) UpdateScene(w http.ResponseWriter, r *http.Request) {
 	if req.Name != nil {
 		newName := *req.Name
 		if errMsg := validateSceneName(newName); errMsg != "" {
-			ctx := middleware.SetErrorCode(r.Context(), ErrCodeValidation)
-			WriteError(w, ctx, http.StatusBadRequest, ErrCodeValidation, errMsg)
+			ctx := middleware.SetErrorCode(r.Context(), ErrCodeInvalidSceneName)
+			WriteError(w, ctx, http.StatusBadRequest, ErrCodeInvalidSceneName, errMsg)
 			return
 		}
 		// Sanitize name after validation
@@ -394,8 +395,8 @@ func (h *SceneHandlers) UpdateScene(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if exists {
-			ctx := middleware.SetErrorCode(r.Context(), ErrCodeConflict)
-			WriteError(w, ctx, http.StatusConflict, ErrCodeConflict, "Scene with this name already exists for this owner")
+			ctx := middleware.SetErrorCode(r.Context(), ErrCodeDuplicateSceneName)
+			WriteError(w, ctx, http.StatusConflict, ErrCodeDuplicateSceneName, "Scene with this name already exists for this owner")
 			return
 		}
 		existingScene.Name = newName
