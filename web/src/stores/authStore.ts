@@ -4,6 +4,8 @@
  * This is a placeholder implementation until full auth is implemented
  */
 
+import { useState, useEffect } from 'react';
+
 export interface User {
   did: string;
   role: 'user' | 'admin';
@@ -52,9 +54,6 @@ export const authStore = {
     listeners.forEach((listener) => listener(authState));
   },
 };
-
-// Export React for the hook
-import { useState, useEffect } from 'react';
 
 /**
  * React hook for accessing auth state
