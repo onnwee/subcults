@@ -96,7 +96,7 @@ func TestPrivacy_EventFetch_WithoutConsent(t *testing.T) {
 	event := &Event{
 		ID:           "event-no-consent",
 		SceneID:      "scene-1",
-		Name:         "Private Event",
+		Title:        "Private Event",
 		Description:  "Should not expose precise location",
 		AllowPrecise: false,
 		PrecisePoint: &Point{Lat: 40.7128, Lng: -74.0060}, // New York
@@ -136,7 +136,7 @@ func TestPrivacy_EventFetch_WithConsent(t *testing.T) {
 	event := &Event{
 		ID:           "event-with-consent",
 		SceneID:      "scene-1",
-		Name:         "Public Event",
+		Title:        "Public Event",
 		Description:  "Consented to precise location",
 		AllowPrecise: true,
 		PrecisePoint: &Point{Lat: expectedLat, Lng: expectedLng},

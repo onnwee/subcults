@@ -95,7 +95,7 @@ func TestEvent_EnforceLocationConsent(t *testing.T) {
 			event := &Event{
 				ID:           "event-1",
 				SceneID:      "scene-1",
-				Name:         "Test Event",
+				Title:         "Test Event",
 				AllowPrecise: tt.allowPrecise,
 			}
 			if tt.hasPrecisePoint {
@@ -222,7 +222,7 @@ func TestInMemoryEventRepository_Insert_WithoutConsent(t *testing.T) {
 	event := &Event{
 		ID:           "event-1",
 		SceneID:      "scene-1",
-		Name:         "Test Event",
+		Title:         "Test Event",
 		AllowPrecise: false, // No consent
 		PrecisePoint: &Point{Lat: 40.7128, Lng: -74.0060},
 	}
@@ -257,7 +257,7 @@ func TestInMemoryEventRepository_Insert_WithConsent(t *testing.T) {
 	event := &Event{
 		ID:           "event-2",
 		SceneID:      "scene-1",
-		Name:         "Test Event With Consent",
+		Title:         "Test Event With Consent",
 		AllowPrecise: true, // Has consent
 		PrecisePoint: &Point{Lat: 40.7128, Lng: -74.0060},
 	}
@@ -290,7 +290,7 @@ func TestInMemoryEventRepository_Update_WithoutConsent(t *testing.T) {
 	event := &Event{
 		ID:           "event-3",
 		SceneID:      "scene-1",
-		Name:         "Test Event",
+		Title:         "Test Event",
 		AllowPrecise: true,
 		PrecisePoint: &Point{Lat: 40.7128, Lng: -74.0060},
 	}
@@ -300,7 +300,7 @@ func TestInMemoryEventRepository_Update_WithoutConsent(t *testing.T) {
 	updatedEvent := &Event{
 		ID:           "event-3",
 		SceneID:      "scene-1",
-		Name:         "Updated Event",
+		Title:         "Updated Event",
 		AllowPrecise: false,                               // Consent removed
 		PrecisePoint: &Point{Lat: 40.7128, Lng: -74.0060}, // Still has point in input
 	}
@@ -392,7 +392,7 @@ func TestInMemoryEventRepository_Insert_DeepCopyProtection(t *testing.T) {
 	event := &Event{
 		ID:           "event-deep-copy",
 		SceneID:      "scene-1",
-		Name:         "Test Event",
+		Title:         "Test Event",
 		AllowPrecise: true,
 		PrecisePoint: originalPoint,
 	}
@@ -623,7 +623,7 @@ rkey := "event123"
 
 event := &Event{
 SceneID:      "scene-1",
-Name:         "Test Event",
+Title:         "Test Event",
 Description:  "A test event",
 AllowPrecise: false,
 RecordDID:    strPtr(did),
@@ -649,8 +649,8 @@ if err != nil {
 t.Fatalf("GetByRecordKey failed: %v", err)
 }
 
-if retrieved.Name != "Test Event" {
-t.Errorf("Expected name 'Test Event', got %s", retrieved.Name)
+if retrieved.Title != "Test Event" {
+t.Errorf("Expected name 'Test Event', got %s", retrieved.Title)
 }
 }
 
@@ -662,7 +662,7 @@ rkey := "event123"
 // First insert
 event := &Event{
 SceneID:      "scene-1",
-Name:         "Original Event",
+Title:         "Original Event",
 Description:  "Original description",
 AllowPrecise: false,
 RecordDID:    strPtr(did),
@@ -681,7 +681,7 @@ t.Error("Expected insert on first upsert")
 // Second upsert with same record key
 event2 := &Event{
 SceneID:      "scene-2",
-Name:         "Updated Event",
+Title:         "Updated Event",
 Description:  "Updated description",
 AllowPrecise: false,
 RecordDID:    strPtr(did),
@@ -707,8 +707,8 @@ if err != nil {
 t.Fatalf("GetByRecordKey failed: %v", err)
 }
 
-if retrieved.Name != "Updated Event" {
-t.Errorf("Expected updated name, got %s", retrieved.Name)
+if retrieved.Title != "Updated Event" {
+t.Errorf("Expected updated name, got %s", retrieved.Title)
 }
 
 if retrieved.SceneID != "scene-2" {
@@ -724,7 +724,7 @@ rkey := "event123"
 // Insert with precise point but consent=false
 event := &Event{
 SceneID:      "scene-1",
-Name:         "Test Event",
+Title:         "Test Event",
 AllowPrecise: false,
 PrecisePoint: &Point{Lat: 40.7128, Lng: -74.0060},
 RecordDID:    strPtr(did),
@@ -749,7 +749,7 @@ t.Error("Expected PrecisePoint to be nil when consent is false")
 // Update with consent=true
 event2 := &Event{
 SceneID:      "scene-1",
-Name:         "Test Event",
+Title:         "Test Event",
 AllowPrecise: true,
 PrecisePoint: &Point{Lat: 40.7128, Lng: -74.0060},
 RecordDID:    strPtr(did),
