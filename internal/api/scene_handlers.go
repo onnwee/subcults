@@ -233,6 +233,13 @@ func (h *SceneHandlers) GetScene(w http.ResponseWriter, r *http.Request) {
 	// Get the scene
 	foundScene, err := h.repo.GetByID(sceneID)
 	if err != nil {
+		// Handle deleted scenes with specific error code
+		if err == scene.ErrSceneDeleted {
+			slog.DebugContext(r.Context(), "scene deleted", "scene_id", sceneID)
+			ctx := middleware.SetErrorCode(r.Context(), ErrCodeSceneDeleted)
+			WriteError(w, ctx, http.StatusNotFound, ErrCodeSceneDeleted, "Scene not found")
+			return
+		}
 		// Use uniform error message to prevent timing attacks and user enumeration
 		// Same error for non-existent and forbidden resources
 		if err == scene.ErrSceneNotFound {
@@ -473,6 +480,11 @@ func (h *SceneHandlers) DeleteScene(w http.ResponseWriter, r *http.Request) {
 		if err == scene.ErrSceneNotFound {
 			ctx := middleware.SetErrorCode(r.Context(), ErrCodeNotFound)
 			WriteError(w, ctx, http.StatusNotFound, ErrCodeNotFound, "Scene not found")
+			return
+		}
+		if err == scene.ErrSceneDeleted {
+			ctx := middleware.SetErrorCode(r.Context(), ErrCodeSceneDeleted)
+			WriteError(w, ctx, http.StatusNotFound, ErrCodeSceneDeleted, "Scene not found")
 			return
 		}
 		slog.ErrorContext(r.Context(), "failed to delete scene", "error", err, "scene_id", sceneID)

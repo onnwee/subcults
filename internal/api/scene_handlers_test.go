@@ -481,10 +481,10 @@ func TestDeleteScene_Success(t *testing.T) {
 		t.Errorf("expected status 204, got %d", w.Code)
 	}
 
-	// Verify scene is soft-deleted (returns 404 on get)
+	// Verify scene is soft-deleted (returns ErrSceneDeleted on get)
 	_, err := repo.GetByID("test-scene-id")
-	if err != scene.ErrSceneNotFound {
-		t.Error("expected scene to be soft-deleted and return ErrSceneNotFound")
+	if err != scene.ErrSceneDeleted {
+		t.Errorf("expected scene to be soft-deleted and return ErrSceneDeleted, got: %v", err)
 	}
 }
 
@@ -541,6 +541,16 @@ func TestDeleteScene_AlreadyDeleted(t *testing.T) {
 
 	if w.Code != http.StatusNotFound {
 		t.Errorf("expected status 404, got %d", w.Code)
+	}
+
+	// Verify it returns scene_deleted error code
+	var errResp ErrorResponse
+	if err := json.NewDecoder(w.Body).Decode(&errResp); err != nil {
+		t.Fatalf("failed to decode error response: %v", err)
+	}
+
+	if errResp.Error.Code != ErrCodeSceneDeleted {
+		t.Errorf("expected error code %s for already deleted scene, got %s", ErrCodeSceneDeleted, errResp.Error.Code)
 	}
 }
 
@@ -1503,5 +1513,312 @@ t.Fatalf("failed to decode response: %v", err)
 // Precise point should be nil (enforced by repository)
 if retrievedScene.PrecisePoint != nil {
 t.Errorf("expected precise_point to be nil when allow_precise=false, got %+v", retrievedScene.PrecisePoint)
+}
+}
+
+// TestGetScene_SoftDeleted tests that soft-deleted scenes return 404 with scene_deleted error code.
+func TestGetScene_SoftDeleted(t *testing.T) {
+repo := scene.NewInMemorySceneRepository()
+membershipRepo := membership.NewInMemoryMembershipRepository()
+handlers := NewSceneHandlers(repo, membershipRepo)
+
+// Create a scene
+now := time.Now()
+testScene := &scene.Scene{
+ID:            "deleted-scene-id",
+Name:          "Deleted Scene",
+OwnerDID:      "did:plc:owner",
+CoarseGeohash: "dr5regw",
+Visibility:    scene.VisibilityPublic,
+CreatedAt:     &now,
+UpdatedAt:     &now,
+}
+if err := repo.Insert(testScene); err != nil {
+t.Fatalf("failed to insert test scene: %v", err)
+}
+
+// Soft-delete the scene
+if err := repo.Delete("deleted-scene-id"); err != nil {
+t.Fatalf("failed to delete scene: %v", err)
+}
+
+// Try to get the deleted scene
+req := httptest.NewRequest(http.MethodGet, "/scenes/deleted-scene-id", nil)
+w := httptest.NewRecorder()
+
+handlers.GetScene(w, req)
+
+// Should return 404 with scene_deleted error code
+if w.Code != http.StatusNotFound {
+t.Errorf("expected status 404 for deleted scene, got %d: %s", w.Code, w.Body.String())
+}
+
+var errResp ErrorResponse
+if err := json.NewDecoder(w.Body).Decode(&errResp); err != nil {
+t.Fatalf("failed to decode error response: %v", err)
+}
+
+if errResp.Error.Code != ErrCodeSceneDeleted {
+t.Errorf("expected error code %s for deleted scene, got %s", ErrCodeSceneDeleted, errResp.Error.Code)
+}
+
+// Error message should still be "Scene not found" to avoid leaking deletion status
+if errResp.Error.Message != "Scene not found" {
+t.Errorf("expected error message 'Scene not found', got %s", errResp.Error.Message)
+}
+}
+
+// TestGetScene_NonExistentVsDeleted tests that non-existent and deleted scenes have different error codes.
+func TestGetScene_NonExistentVsDeleted(t *testing.T) {
+repo := scene.NewInMemorySceneRepository()
+membershipRepo := membership.NewInMemoryMembershipRepository()
+handlers := NewSceneHandlers(repo, membershipRepo)
+
+// Create and delete a scene
+now := time.Now()
+deletedScene := &scene.Scene{
+ID:            "deleted-scene-id",
+Name:          "Deleted Scene",
+OwnerDID:      "did:plc:owner",
+CoarseGeohash: "dr5regw",
+Visibility:    scene.VisibilityPublic,
+CreatedAt:     &now,
+UpdatedAt:     &now,
+}
+if err := repo.Insert(deletedScene); err != nil {
+t.Fatalf("failed to insert test scene: %v", err)
+}
+if err := repo.Delete("deleted-scene-id"); err != nil {
+t.Fatalf("failed to delete scene: %v", err)
+}
+
+// Test deleted scene
+req1 := httptest.NewRequest(http.MethodGet, "/scenes/deleted-scene-id", nil)
+w1 := httptest.NewRecorder()
+handlers.GetScene(w1, req1)
+
+if w1.Code != http.StatusNotFound {
+t.Errorf("expected status 404 for deleted scene, got %d", w1.Code)
+}
+
+var deletedErrResp ErrorResponse
+if err := json.NewDecoder(w1.Body).Decode(&deletedErrResp); err != nil {
+t.Fatalf("failed to decode deleted scene error response: %v", err)
+}
+
+if deletedErrResp.Error.Code != ErrCodeSceneDeleted {
+t.Errorf("expected error code %s for deleted scene, got %s", ErrCodeSceneDeleted, deletedErrResp.Error.Code)
+}
+
+// Test non-existent scene
+req2 := httptest.NewRequest(http.MethodGet, "/scenes/never-existed-id", nil)
+w2 := httptest.NewRecorder()
+handlers.GetScene(w2, req2)
+
+if w2.Code != http.StatusNotFound {
+t.Errorf("expected status 404 for non-existent scene, got %d", w2.Code)
+}
+
+var notFoundErrResp ErrorResponse
+if err := json.NewDecoder(w2.Body).Decode(&notFoundErrResp); err != nil {
+t.Fatalf("failed to decode non-existent scene error response: %v", err)
+}
+
+if notFoundErrResp.Error.Code != ErrCodeNotFound {
+t.Errorf("expected error code %s for non-existent scene, got %s", ErrCodeNotFound, notFoundErrResp.Error.Code)
+}
+
+// Both should have the same user-facing message to prevent enumeration
+if deletedErrResp.Error.Message != notFoundErrResp.Error.Message {
+t.Errorf("deleted and non-existent scenes should have same error message for security, got '%s' vs '%s'",
+deletedErrResp.Error.Message, notFoundErrResp.Error.Message)
+}
+}
+
+// TestGetScene_OtherScenesAccessibleAfterDeletion tests that deleting one scene doesn't affect others.
+func TestGetScene_OtherScenesAccessibleAfterDeletion(t *testing.T) {
+repo := scene.NewInMemorySceneRepository()
+membershipRepo := membership.NewInMemoryMembershipRepository()
+handlers := NewSceneHandlers(repo, membershipRepo)
+
+now := time.Now()
+
+// Create multiple scenes
+scene1 := &scene.Scene{
+ID:            "scene-1",
+Name:          "Scene One",
+OwnerDID:      "did:plc:owner",
+CoarseGeohash: "dr5regw",
+Visibility:    scene.VisibilityPublic,
+CreatedAt:     &now,
+UpdatedAt:     &now,
+}
+scene2 := &scene.Scene{
+ID:            "scene-2",
+Name:          "Scene Two",
+OwnerDID:      "did:plc:owner",
+CoarseGeohash: "dr5regw",
+Visibility:    scene.VisibilityPublic,
+CreatedAt:     &now,
+UpdatedAt:     &now,
+}
+scene3 := &scene.Scene{
+ID:            "scene-3",
+Name:          "Scene Three",
+OwnerDID:      "did:plc:owner",
+CoarseGeohash: "dr5regw",
+Visibility:    scene.VisibilityPublic,
+CreatedAt:     &now,
+UpdatedAt:     &now,
+}
+
+for _, s := range []*scene.Scene{scene1, scene2, scene3} {
+if err := repo.Insert(s); err != nil {
+t.Fatalf("failed to insert scene %s: %v", s.ID, err)
+}
+}
+
+// Delete scene-2
+if err := repo.Delete("scene-2"); err != nil {
+t.Fatalf("failed to delete scene-2: %v", err)
+}
+
+// Verify scene-1 is still accessible
+req1 := httptest.NewRequest(http.MethodGet, "/scenes/scene-1", nil)
+w1 := httptest.NewRecorder()
+handlers.GetScene(w1, req1)
+
+if w1.Code != http.StatusOK {
+t.Errorf("expected scene-1 to be accessible (200), got %d: %s", w1.Code, w1.Body.String())
+}
+
+// Verify scene-2 is not accessible (deleted)
+req2 := httptest.NewRequest(http.MethodGet, "/scenes/scene-2", nil)
+w2 := httptest.NewRecorder()
+handlers.GetScene(w2, req2)
+
+if w2.Code != http.StatusNotFound {
+t.Errorf("expected scene-2 to be inaccessible (404), got %d", w2.Code)
+}
+
+var err2Resp ErrorResponse
+if err := json.NewDecoder(w2.Body).Decode(&err2Resp); err != nil {
+t.Fatalf("failed to decode error response: %v", err)
+}
+
+if err2Resp.Error.Code != ErrCodeSceneDeleted {
+t.Errorf("expected error code %s for deleted scene-2, got %s", ErrCodeSceneDeleted, err2Resp.Error.Code)
+}
+
+// Verify scene-3 is still accessible
+req3 := httptest.NewRequest(http.MethodGet, "/scenes/scene-3", nil)
+w3 := httptest.NewRecorder()
+handlers.GetScene(w3, req3)
+
+if w3.Code != http.StatusOK {
+t.Errorf("expected scene-3 to be accessible (200), got %d: %s", w3.Code, w3.Body.String())
+}
+}
+
+// TestDeleteScene_AlreadyDeletedReturnsSceneDeleted tests that deleting an already deleted scene returns scene_deleted error.
+func TestDeleteScene_AlreadyDeletedReturnsSceneDeleted(t *testing.T) {
+repo := scene.NewInMemorySceneRepository()
+membershipRepo := membership.NewInMemoryMembershipRepository()
+handlers := NewSceneHandlers(repo, membershipRepo)
+
+now := time.Now()
+testScene := &scene.Scene{
+ID:            "test-scene-id",
+Name:          "Test Scene",
+OwnerDID:      "did:plc:test123",
+CoarseGeohash: "dr5regw",
+CreatedAt:     &now,
+UpdatedAt:     &now,
+}
+if err := repo.Insert(testScene); err != nil {
+    t.Fatalf("failed to insert test scene: %v", err)
+}
+
+// Delete once successfully
+req1 := httptest.NewRequest(http.MethodDelete, "/scenes/test-scene-id", nil)
+w1 := httptest.NewRecorder()
+handlers.DeleteScene(w1, req1)
+
+if w1.Code != http.StatusNoContent {
+t.Errorf("first deletion should succeed with 204, got %d", w1.Code)
+}
+
+// Try to delete again - should return scene_deleted error code
+req2 := httptest.NewRequest(http.MethodDelete, "/scenes/test-scene-id", nil)
+w2 := httptest.NewRecorder()
+handlers.DeleteScene(w2, req2)
+
+if w2.Code != http.StatusNotFound {
+t.Errorf("expected status 404 when deleting already deleted scene, got %d", w2.Code)
+}
+
+var errResp ErrorResponse
+if err := json.NewDecoder(w2.Body).Decode(&errResp); err != nil {
+t.Fatalf("failed to decode error response: %v", err)
+}
+
+if errResp.Error.Code != ErrCodeSceneDeleted {
+t.Errorf("expected error code %s when deleting already deleted scene, got %s", ErrCodeSceneDeleted, errResp.Error.Code)
+}
+}
+
+// TestRepository_DeletedSceneExcludedFromExistsByOwnerAndName tests that deleted scenes are excluded from duplicate checks.
+func TestRepository_DeletedSceneExcludedFromExistsByOwnerAndName(t *testing.T) {
+repo := scene.NewInMemorySceneRepository()
+
+now := time.Now()
+
+// Create and delete a scene
+scene1 := &scene.Scene{
+ID:            "scene-1",
+Name:          "My Scene",
+OwnerDID:      "did:plc:owner",
+CoarseGeohash: "dr5regw",
+CreatedAt:     &now,
+UpdatedAt:     &now,
+}
+if err := repo.Insert(scene1); err != nil {
+t.Fatalf("failed to insert scene: %v", err)
+}
+if err := repo.Delete("scene-1"); err != nil {
+t.Fatalf("failed to delete scene: %v", err)
+}
+
+// Check if name exists (should not, since scene is deleted)
+exists, err := repo.ExistsByOwnerAndName("did:plc:owner", "My Scene", "")
+if err != nil {
+t.Fatalf("ExistsByOwnerAndName failed: %v", err)
+}
+
+if exists {
+t.Error("deleted scene should not be counted in ExistsByOwnerAndName")
+}
+
+// Create a new scene with the same name (should be allowed)
+scene2 := &scene.Scene{
+ID:            "scene-2",
+Name:          "My Scene",
+OwnerDID:      "did:plc:owner",
+CoarseGeohash: "dr5regw",
+CreatedAt:     &now,
+UpdatedAt:     &now,
+}
+if err := repo.Insert(scene2); err != nil {
+t.Fatalf("failed to insert scene with same name as deleted scene: %v", err)
+}
+
+// Now the name should exist
+exists, err = repo.ExistsByOwnerAndName("did:plc:owner", "My Scene", "")
+if err != nil {
+t.Fatalf("ExistsByOwnerAndName failed: %v", err)
+}
+
+if !exists {
+t.Error("new scene with same name should be found by ExistsByOwnerAndName")
 }
 }

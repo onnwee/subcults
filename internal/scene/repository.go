@@ -12,8 +12,9 @@ import (
 
 // Common errors for scene and event operations.
 var (
-	ErrSceneNotFound     = errors.New("scene not found")
-	ErrEventNotFound     = errors.New("event not found")
+	ErrSceneNotFound      = errors.New("scene not found")
+	ErrSceneDeleted       = errors.New("scene deleted")
+	ErrEventNotFound      = errors.New("event not found")
 	ErrDuplicateSceneName = errors.New("scene name already exists for this owner")
 )
 
@@ -133,13 +134,17 @@ func (r *InMemorySceneRepository) Update(scene *Scene) error {
 }
 
 // GetByID retrieves a scene by its ID.
-// Returns ErrSceneNotFound if scene doesn't exist or is soft-deleted.
+// Returns ErrSceneNotFound if scene doesn't exist.
+// Returns ErrSceneDeleted if scene exists but is soft-deleted.
 func (r *InMemorySceneRepository) GetByID(id string) (*Scene, error) {
 	r.mu.RLock()
 	scene, ok := r.scenes[id]
 	r.mu.RUnlock()
-	if !ok || scene.DeletedAt != nil {
+	if !ok {
 		return nil, ErrSceneNotFound
+	}
+	if scene.DeletedAt != nil {
+		return nil, ErrSceneDeleted
 	}
 	// Return a copy to avoid external modification
 	sceneCopy := *scene
@@ -233,14 +238,18 @@ func (r *InMemorySceneRepository) GetByRecordKey(did, rkey string) (*Scene, erro
 }
 
 // Delete soft-deletes a scene by setting deleted_at timestamp.
-// Returns ErrSceneNotFound if scene doesn't exist or is already deleted.
+// Returns ErrSceneNotFound if scene doesn't exist.
+// Returns ErrSceneDeleted if scene is already deleted.
 func (r *InMemorySceneRepository) Delete(id string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	scene, ok := r.scenes[id]
-	if !ok || scene.DeletedAt != nil {
+	if !ok {
 		return ErrSceneNotFound
+	}
+	if scene.DeletedAt != nil {
+		return ErrSceneDeleted
 	}
 
 	now := time.Now()
