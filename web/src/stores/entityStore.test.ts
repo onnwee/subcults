@@ -4,9 +4,9 @@
  */
 
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { act } from '@testing-library/react';
 import {
   useEntityStore,
+  User,
   isStale,
   createFreshMetadata,
   setLoadingMetadata,
@@ -16,7 +16,6 @@ import {
   inFlightRequests,
 } from './entityStore';
 import { Scene, Event } from '../types/scene';
-import { User } from './authStore';
 import * as apiClientModule from '../lib/api-client';
 
 // Mock API client

@@ -50,7 +50,7 @@ export function useScene(id: string | undefined): UseSceneResult {
   );
 
   return {
-    scene: cached?.data || null,
+    scene: cached?.data?.id ? cached.data : null,
     loading: cached?.metadata.loading || false,
     error: cached?.metadata.error || null,
     refetch,

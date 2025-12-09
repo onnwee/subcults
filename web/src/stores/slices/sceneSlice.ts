@@ -8,7 +8,6 @@ import { apiClient } from '../../lib/api-client';
 import { Scene } from '../../types/scene';
 import {
   EntityStore,
-  CachedEntity,
   createFreshMetadata,
   setLoadingMetadata,
   setSuccessMetadata,
@@ -68,8 +67,8 @@ export const createSceneSlice: StateCreator<
         }));
 
         return scene;
-      } catch (error: any) {
-        const errorMessage = error?.message || 'Failed to fetch scene';
+      } catch (error: unknown) {
+        const errorMessage = (error as Error)?.message || 'Failed to fetch scene';
 
         // Update cache with error
         set((state) => ({
@@ -133,7 +132,9 @@ export const createSceneSlice: StateCreator<
     });
   },
 
-  optimisticJoinScene: (sceneId: string, userId: string) => {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  optimisticJoinScene: (sceneId: string, _userId: string) => {
+    // Note: _userId parameter reserved for future use in optimistic update logic
     const state = get();
     const cached = state.scene.scenes[sceneId];
 
@@ -185,7 +186,9 @@ export const createSceneSlice: StateCreator<
     // Restore from backup
     set((state) => {
       const cached = state.scene.scenes[sceneId];
-      const { [sceneId]: removed, ...remainingUpdates } = state.scene.optimisticUpdates;
+      // Remove from optimistic updates
+      const remainingUpdates = { ...state.scene.optimisticUpdates };
+      delete remainingUpdates[sceneId];
 
       return {
         scene: {
@@ -206,7 +209,8 @@ export const createSceneSlice: StateCreator<
   commitSceneUpdate: (sceneId: string) => {
     // Remove backup after successful commit
     set((state) => {
-      const { [sceneId]: removed, ...remainingUpdates } = state.scene.optimisticUpdates;
+      const remainingUpdates = { ...state.scene.optimisticUpdates };
+      delete remainingUpdates[sceneId];
 
       return {
         scene: {
@@ -242,8 +246,11 @@ export const createSceneSlice: StateCreator<
 
   removeScene: (id: string) => {
     set((state) => {
-      const { [id]: removed, ...remainingScenes } = state.scene.scenes;
-      const { [id]: removedUpdate, ...remainingUpdates } = state.scene.optimisticUpdates;
+      const remainingScenes = { ...state.scene.scenes };
+      delete remainingScenes[id];
+      
+      const remainingUpdates = { ...state.scene.optimisticUpdates };
+      delete remainingUpdates[id];
 
       return {
         scene: {

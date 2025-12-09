@@ -77,7 +77,18 @@ export function useScenes(options: UseScenesOptions = {}): UseScenesResult {
  * Hook to get a specific user's scenes
  */
 export function useUserScenes(userId: string | undefined): UseScenesResult {
-  return useScenes({ filterByOwner: userId });
+  const result = useScenes({ filterByOwner: userId });
+  
+  // Return empty results if userId is undefined
+  if (!userId) {
+    return {
+      scenes: [],
+      activeCount: 0,
+      loading: false,
+    };
+  }
+  
+  return result;
 }
 
 /**

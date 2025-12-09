@@ -5,7 +5,15 @@
 
 import { create } from 'zustand';
 import { Scene, Event } from '../types/scene';
-import { User } from './authStore';
+
+/**
+ * User type (minimal PII)
+ * Matches User from authStore but defined here to avoid circular dependency
+ */
+export interface User {
+  did: string;
+  role: 'user' | 'admin';
+}
 
 /**
  * Cache entry metadata
@@ -201,7 +209,7 @@ export type EntityStore = EntityStoreState & EntityStoreActions;
 /**
  * In-flight requests tracker to prevent duplicate fetches
  */
-export const inFlightRequests = new Map<string, Promise<any>>();
+export const inFlightRequests = new Map<string, Promise<unknown>>();
 
 /**
  * Get or create in-flight request
@@ -223,22 +231,6 @@ export function getOrCreateRequest<T>(
   inFlightRequests.set(key, promise);
   return promise;
 }
-
-/**
- * Initial state
- */
-const initialState: EntityStoreState = {
-  scene: {
-    scenes: {},
-    optimisticUpdates: {},
-  },
-  event: {
-    events: {},
-  },
-  user: {
-    users: {},
-  },
-};
 
 /**
  * Entity Store

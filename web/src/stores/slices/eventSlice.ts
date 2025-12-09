@@ -66,8 +66,8 @@ export const createEventSlice: StateCreator<
         }));
 
         return event;
-      } catch (error: any) {
-        const errorMessage = error?.message || 'Failed to fetch event';
+      } catch (error: unknown) {
+        const errorMessage = (error as Error)?.message || 'Failed to fetch event';
 
         // Update cache with error
         set((state) => ({
@@ -156,7 +156,8 @@ export const createEventSlice: StateCreator<
 
   removeEvent: (id: string) => {
     set((state) => {
-      const { [id]: removed, ...remainingEvents } = state.event.events;
+      const remainingEvents = { ...state.event.events };
+      delete remainingEvents[id];
 
       return {
         event: {

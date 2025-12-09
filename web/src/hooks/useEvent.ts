@@ -50,7 +50,7 @@ export function useEvent(id: string | undefined): UseEventResult {
   );
 
   return {
-    event: cached?.data || null,
+    event: cached?.data?.id ? cached.data : null,
     loading: cached?.metadata.loading || false,
     error: cached?.metadata.error || null,
     refetch,

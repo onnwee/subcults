@@ -5,9 +5,9 @@
 
 import { StateCreator } from 'zustand';
 import { apiClient } from '../../lib/api-client';
-import { User } from '../../authStore';
 import {
   EntityStore,
+  User,
   createFreshMetadata,
   setLoadingMetadata,
   setSuccessMetadata,
@@ -66,8 +66,8 @@ export const createUserSlice: StateCreator<
         }));
 
         return user;
-      } catch (error: any) {
-        const errorMessage = error?.message || 'Failed to fetch user';
+      } catch (error: unknown) {
+        const errorMessage = (error as Error)?.message || 'Failed to fetch user';
 
         // Update cache with error
         set((state) => ({
@@ -156,7 +156,8 @@ export const createUserSlice: StateCreator<
 
   removeUser: (did: string) => {
     set((state) => {
-      const { [did]: removed, ...remainingUsers } = state.user.users;
+      const remainingUsers = { ...state.user.users };
+      delete remainingUsers[did];
 
       return {
         user: {

@@ -84,7 +84,18 @@ export function useEvents(options: UseEventsOptions = {}): UseEventsResult {
  * Hook to get events for a specific scene
  */
 export function useSceneEvents(sceneId: string | undefined): UseEventsResult {
-  return useEvents({ filterByScene: sceneId });
+  const result = useEvents({ filterByScene: sceneId });
+  
+  // Return empty results if sceneId is undefined
+  if (!sceneId) {
+    return {
+      events: [],
+      upcomingCount: 0,
+      loading: false,
+    };
+  }
+  
+  return result;
 }
 
 /**
