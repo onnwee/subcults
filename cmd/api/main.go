@@ -51,9 +51,11 @@ func main() {
 	eventRepo := scene.NewInMemoryEventRepository()
 	sceneRepo := scene.NewInMemorySceneRepository()
 	auditRepo := audit.NewInMemoryRepository()
+	rsvpRepo := scene.NewInMemoryRSVPRepository()
 
 	// Initialize handlers
-	eventHandlers := api.NewEventHandlers(eventRepo, sceneRepo, auditRepo)
+	eventHandlers := api.NewEventHandlers(eventRepo, sceneRepo, auditRepo, rsvpRepo)
+	rsvpHandlers := api.NewRSVPHandlers(rsvpRepo, eventRepo)
 
 	// Create HTTP server with routes
 	mux := http.NewServeMux()
@@ -70,13 +72,27 @@ func main() {
 	})
 
 	mux.HandleFunc("/events/", func(w http.ResponseWriter, r *http.Request) {
-		// Parse path to check for cancel endpoint
-		// Expected patterns: /events/{id} or /events/{id}/cancel
+		// Parse path to check for special endpoints
+		// Expected patterns: /events/{id}, /events/{id}/cancel, /events/{id}/rsvp
 		pathParts := strings.Split(strings.TrimPrefix(r.URL.Path, "/events/"), "/")
 		
 		// Check if this is a cancel request: /events/{id}/cancel
 		if len(pathParts) == 2 && pathParts[0] != "" && pathParts[1] == "cancel" && r.Method == http.MethodPost {
 			eventHandlers.CancelEvent(w, r)
+			return
+		}
+		
+		// Check if this is an RSVP request: /events/{id}/rsvp
+		if len(pathParts) == 2 && pathParts[0] != "" && pathParts[1] == "rsvp" {
+			switch r.Method {
+			case http.MethodPost:
+				rsvpHandlers.CreateOrUpdateRSVP(w, r)
+			case http.MethodDelete:
+				rsvpHandlers.DeleteRSVP(w, r)
+			default:
+				ctx := middleware.SetErrorCode(r.Context(), api.ErrCodeBadRequest)
+				api.WriteError(w, ctx, http.StatusMethodNotAllowed, api.ErrCodeBadRequest, "Method not allowed")
+			}
 			return
 		}
 		
