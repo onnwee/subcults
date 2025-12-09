@@ -24,8 +24,15 @@ const LOGOUT_CHANNEL = 'subcults_auth_logout';
 let logoutChannel: BroadcastChannel | null = null;
 
 // Initialize BroadcastChannel if supported
+// NOTE: This module is intended for browser contexts only.
 if (typeof BroadcastChannel !== 'undefined') {
-  logoutChannel = new BroadcastChannel(LOGOUT_CHANNEL);
+  try {
+    logoutChannel = new BroadcastChannel(LOGOUT_CHANNEL);
+  } catch (e) {
+    // Fallback: disable multi-tab sync if BroadcastChannel fails
+    console.warn('[authStore] BroadcastChannel initialization failed, multi-tab sync disabled:', e);
+    logoutChannel = null;
+  }
 }
 
 // In-memory auth state (access token stored here, refresh token in httpOnly cookie)
@@ -47,7 +54,8 @@ const RETRY_CONFIG = {
 };
 
 /**
- * Sleep utility for retry delays
+ * Sleep utility for retry delays.
+ * Assumes the timer will complete - safe because only used within try-catch blocks.
  */
 const sleep = (ms: number): Promise<void> => {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -71,6 +79,14 @@ const refreshAccessToken = async (
       // Don't retry on 401 (refresh token invalid/expired)
       if (response.status === 401) {
         return null;
+      }
+
+      // Log unexpected 4xx errors for debugging (except 401)
+      if (response.status >= 400 && response.status < 500) {
+        // Do not log PII or tokens
+        console.warn(
+          `[authStore] Token refresh failed with status ${response.status}: ${response.statusText}`
+        );
       }
 
       // Retry on transient errors (5xx, network issues)
@@ -135,6 +151,8 @@ const handleUnauthorized = (): void => {
   }
   
   // Redirect to login if not already there
+  // Note: Uses window.location.href for forced logout (full page reload)
+  // to ensure complete state cleanup, though this breaks SPA navigation
   if (window.location.pathname !== '/account/login') {
     window.location.href = '/account/login';
   }
@@ -147,31 +165,44 @@ const notifyListeners = (): void => {
   listeners.forEach((listener) => listener(authState));
 };
 
+/**
+ * Initialize API client and event listeners.
+ * Separated to avoid circular dependency issues with module-level initialization.
+ */
+const initializeApiClient = (): void => {
+  apiClient.initialize({
+    baseURL: '/api',
+    getAccessToken: () => authState.accessToken,
+    refreshToken: refreshAccessToken,
+    onUnauthorized: handleUnauthorized,
+  });
+};
+
 // Initialize API client with auth callbacks
-apiClient.initialize({
-  baseURL: '/api',
-  getAccessToken: () => authState.accessToken,
-  refreshToken: refreshAccessToken,
-  onUnauthorized: handleUnauthorized,
-});
+initializeApiClient();
 
 // Listen for logout events from other tabs
 if (logoutChannel) {
   logoutChannel.addEventListener('message', (event) => {
     if (event.data.type === 'logout') {
-      // Another tab logged out, sync this tab
-      authState = {
-        user: null,
-        isAuthenticated: false,
-        isAdmin: false,
-        isLoading: false,
-        accessToken: null,
-      };
-      notifyListeners();
-      
-      // Redirect to login if not already there
-      if (window.location.pathname !== '/account/login') {
-        window.location.href = '/account/login';
+      // Only process logout if currently authenticated to avoid redundant state changes
+      if (authState.isAuthenticated) {
+        // Another tab logged out, sync this tab
+        authState = {
+          user: null,
+          isAuthenticated: false,
+          isAdmin: false,
+          isLoading: false,
+          accessToken: null,
+        };
+        notifyListeners();
+        
+        // Redirect to login if not already there
+        // Note: Uses window.location.href for forced logout (full page reload)
+        // to ensure complete state cleanup, though this breaks SPA navigation
+        if (window.location.pathname !== '/account/login') {
+          window.location.href = '/account/login';
+        }
       }
     }
   });
@@ -188,7 +219,13 @@ export const authStore = {
   },
 
   /**
-   * Set user and access token (called after successful login)
+   * Set user and access token (called after successful login).
+   * 
+   * Note: This replaces the previous setUser(user | null) signature.
+   * To clear auth state, use logout() instead of setUser(null).
+   * 
+   * @param user - The authenticated user object
+   * @param accessToken - The access token received from login
    */
   setUser: (user: User, accessToken: string): void => {
     authState = {

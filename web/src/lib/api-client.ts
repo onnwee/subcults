@@ -94,6 +94,7 @@ class ApiClient {
     let response = await fetch(url, {
       ...fetchOptions,
       headers,
+      credentials: fetchOptions.credentials || 'include', // Include cookies by default
     });
 
     // Handle 401 Unauthorized
@@ -107,11 +108,14 @@ class ApiClient {
         response = await fetch(url, {
           ...fetchOptions,
           headers,
+          credentials: fetchOptions.credentials || 'include',
         });
       } else {
-        // Refresh failed, throw error
-        const error = await this.parseError(response);
-        throw new ApiClientError(error.status, error.code, error.message);
+        // Refresh failed, onUnauthorized was called and will handle redirect
+        // Return early to avoid race condition with the redirect
+        return Promise.reject(
+          new ApiClientError(401, 'unauthorized', 'Session expired. Redirecting to login.')
+        );
       }
     }
 
@@ -165,9 +169,10 @@ class ApiClient {
       }
 
       return newToken;
-    } catch {
+    } catch (error) {
       // Catch any errors during refresh (network failures, etc.)
-      // Error details are not needed here as onUnauthorized handles the cleanup
+      // Log error for debugging while maintaining user experience
+      console.warn('[apiClient] Token refresh failed:', error);
       
       // Clear refresh promise on error
       this.refreshPromise = null;
