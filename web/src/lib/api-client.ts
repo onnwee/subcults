@@ -166,6 +166,9 @@ class ApiClient {
 
       return newToken;
     } catch {
+      // Catch any errors during refresh (network failures, etc.)
+      // Error details are not needed here as onUnauthorized handles the cleanup
+      
       // Clear refresh promise on error
       this.refreshPromise = null;
       
