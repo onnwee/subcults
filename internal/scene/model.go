@@ -4,6 +4,13 @@ package scene
 
 import "time"
 
+// Visibility modes for scenes
+const (
+	VisibilityPublic      = "public"   // Visible to all users and appears in search
+	VisibilityMembersOnly = "private"  // Visible only to active members and owner (DB uses "private")
+	VisibilityHidden      = "unlisted" // Visible only to owner, exempt from search (DB uses "unlisted")
+)
+
 // Point represents a geographic coordinate with latitude and longitude.
 type Point struct {
 	Lat float64 `json:"lat"`
@@ -83,4 +90,9 @@ func (e *Event) EnforceLocationConsent() *Event {
 		e.PrecisePoint = nil
 	}
 	return e
+}
+
+// IsOwner checks if the given DID is the owner of the scene.
+func (s *Scene) IsOwner(userDID string) bool {
+	return s.OwnerDID == userDID
 }
