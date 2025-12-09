@@ -179,7 +179,6 @@ class ApiClient {
 
     // Execute request with retry logic
     let lastError: ApiClientError | null = null;
-    let retryCount = 0;
 
     for (let attempt = 0; attempt < RETRY_CONFIG.maxAttempts; attempt++) {
       try {
@@ -258,7 +257,6 @@ class ApiClient {
           }
 
           // Calculate delay and wait before retry
-          retryCount++;
           const delay = calculateDelay(attempt);
           await sleep(delay);
         }
@@ -278,7 +276,7 @@ class ApiClient {
     }
 
     // Should never reach here, but TypeScript requires a return
-    throw lastError || new ApiClientError(0, 'unknown_error', 'Unknown error occurred', retryCount);
+    throw lastError || new ApiClientError(0, 'unknown_error', 'Unknown error occurred', 0);
   }
 
   /**

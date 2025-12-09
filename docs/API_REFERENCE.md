@@ -163,6 +163,7 @@ The following HTTP methods are automatically retried on failure:
 
 These methods are **never** automatically retried:
 - **POST**: May create duplicate resources
+- **PATCH**: Partial updates may not be idempotent
 
 ### Retry Conditions
 

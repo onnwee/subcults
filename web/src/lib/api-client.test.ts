@@ -346,6 +346,18 @@ describe('ApiClient', () => {
       expect(global.fetch).toHaveBeenCalledTimes(1); // No retries
     });
 
+    it('does not retry PATCH requests on 5xx errors', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ({ code: 'internal_error', message: 'Internal server error' }),
+      });
+
+      await expect(apiClient.patch('/test', { data: 'test' })).rejects.toThrow(ApiClientError);
+      expect(global.fetch).toHaveBeenCalledTimes(1); // No retries
+    });
+
     it('retries PUT and DELETE requests on 5xx errors', async () => {
       vi.useFakeTimers();
 
