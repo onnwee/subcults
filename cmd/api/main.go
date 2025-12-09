@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -69,6 +70,12 @@ func main() {
 	})
 
 	mux.HandleFunc("/events/", func(w http.ResponseWriter, r *http.Request) {
+		// Check if this is a cancel request
+		if strings.HasSuffix(r.URL.Path, "/cancel") && r.Method == http.MethodPost {
+			eventHandlers.CancelEvent(w, r)
+			return
+		}
+		
 		switch r.Method {
 		case http.MethodGet:
 			eventHandlers.GetEvent(w, r)
