@@ -9,10 +9,12 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/onnwee/subcults/internal/api"
+	"github.com/onnwee/subcults/internal/audit"
 	"github.com/onnwee/subcults/internal/middleware"
 	"github.com/onnwee/subcults/internal/scene"
 )
@@ -48,9 +50,10 @@ func main() {
 	// Initialize repositories
 	eventRepo := scene.NewInMemoryEventRepository()
 	sceneRepo := scene.NewInMemorySceneRepository()
+	auditRepo := audit.NewInMemoryRepository()
 
 	// Initialize handlers
-	eventHandlers := api.NewEventHandlers(eventRepo, sceneRepo)
+	eventHandlers := api.NewEventHandlers(eventRepo, sceneRepo, auditRepo)
 
 	// Create HTTP server with routes
 	mux := http.NewServeMux()
@@ -67,6 +70,16 @@ func main() {
 	})
 
 	mux.HandleFunc("/events/", func(w http.ResponseWriter, r *http.Request) {
+		// Parse path to check for cancel endpoint
+		// Expected patterns: /events/{id} or /events/{id}/cancel
+		pathParts := strings.Split(strings.TrimPrefix(r.URL.Path, "/events/"), "/")
+		
+		// Check if this is a cancel request: /events/{id}/cancel
+		if len(pathParts) == 2 && pathParts[0] != "" && pathParts[1] == "cancel" && r.Method == http.MethodPost {
+			eventHandlers.CancelEvent(w, r)
+			return
+		}
+		
 		switch r.Method {
 		case http.MethodGet:
 			eventHandlers.GetEvent(w, r)

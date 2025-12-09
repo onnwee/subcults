@@ -16,13 +16,14 @@ The `EventHandlers` struct manages all event-related HTTP endpoints.
 type EventHandlers struct {
     eventRepo scene.EventRepository
     sceneRepo scene.SceneRepository
+    auditRepo audit.Repository
 }
 ```
 
 **Constructor:**
 
 ```go
-func NewEventHandlers(eventRepo scene.EventRepository, sceneRepo scene.SceneRepository) *EventHandlers
+func NewEventHandlers(eventRepo scene.EventRepository, sceneRepo scene.SceneRepository, auditRepo audit.Repository) *EventHandlers
 ```
 
 ## Endpoints
@@ -228,6 +229,80 @@ Retrieves a single event by ID.
 | 404 | `not_found` | Event not found |
 | 500 | `internal_error` | Server error during retrieval |
 
+### POST /events/{id}/cancel - Cancel Event
+
+Cancels an event by updating its status and storing cancellation metadata. This endpoint is idempotent: cancelling an already-cancelled event returns success without modification.
+
+**URL Parameters:**
+- `id`: Event UUID
+
+**Request Body (optional):**
+
+```json
+{
+  "reason": "Venue unavailable"
+}
+```
+
+**Optional Fields:**
+- `reason`: Text explanation for cancellation (sanitized for HTML safety)
+
+**Authorization:**
+- Requires authentication (JWT token)
+- User must be the owner of the parent scene
+
+**Behavior:**
+- Sets `status` to `"cancelled"`
+- Stores `cancelled_at` timestamp (current time)
+- Stores `cancellation_reason` if provided
+- Emits audit log entry with action `"event_cancel"`
+- **Idempotent:** Second cancellation of same event returns 200 OK with no changes and no duplicate audit log
+
+**Success Response (200 OK):**
+
+```json
+{
+  "id": "event-uuid",
+  "scene_id": "scene-uuid",
+  "title": "Event Title",
+  "description": "Description",
+  "allow_precise": true,
+  "precise_point": {
+    "lat": 40.7128,
+    "lng": -74.0060
+  },
+  "coarse_geohash": "dr5regw",
+  "tags": ["tag1", "tag2"],
+  "status": "cancelled",
+  "starts_at": "2024-12-25T20:00:00Z",
+  "ends_at": "2024-12-25T23:00:00Z",
+  "created_at": "2024-12-09T18:00:00Z",
+  "updated_at": "2024-12-09T18:30:00Z",
+  "cancelled_at": "2024-12-09T18:30:00Z",
+  "cancellation_reason": "Venue unavailable"
+}
+```
+
+**Error Responses:**
+
+| Status | Error Code | Description |
+|--------|------------|-------------|
+| 400 | `bad_request` | Missing or invalid event ID |
+| 401 | `auth_failed` | Authentication required |
+| 403 | `forbidden` | User does not own the parent scene |
+| 404 | `not_found` | Event or parent scene not found |
+| 500 | `internal_error` | Server error during cancellation |
+
+**Audit Logging:**
+- Entity Type: `"event"`
+- Entity ID: Event UUID
+- Action: `"event_cancel"`
+- Only logged on first cancellation (not on idempotent retries)
+
+**Search/List Behavior:**
+- Cancelled events are excluded from upcoming event searches/listings
+- Existing database indexes use `WHERE cancelled_at IS NULL` for filtering
+
 ## Validation Rules
 
 ### Title Validation
@@ -308,6 +383,14 @@ Comprehensive test coverage includes:
   - Privacy enforcement on creation (allow_precise=false)
   - Privacy enforcement on retrieval (precise_point hidden)
 
+- **Cancellation Tests:**
+  - Successful cancellation with reason
+  - Successful cancellation without reason
+  - Unauthorized cancellation (non-scene-owner)
+  - Idempotent cancellation (already cancelled)
+  - Audit log emission on first cancel
+  - No duplicate audit log on second cancel
+
 Run tests:
 
 ```bash
@@ -326,12 +409,24 @@ go test -v ./internal/api/event_handlers_test.go
 | `bad_request` | Malformed request (invalid JSON, missing ID) |
 | `internal_error` | Server error |
 
+## Database Schema
+
+### Event Cancellation Fields
+
+The events table includes the following cancellation-related fields:
+
+- `status` TEXT - Event lifecycle status (scheduled, live, ended, cancelled)
+- `cancelled_at` TIMESTAMPTZ - Timestamp when event was cancelled (NULL if not cancelled)
+- `cancellation_reason` TEXT - Optional reason for cancellation (NULL if not provided)
+
+**Indexes:**
+Database indexes automatically filter out cancelled events using `WHERE cancelled_at IS NULL` clause, ensuring cancelled events are excluded from performance-critical queries.
+
 ## Future Enhancements
 
 - Event search and filtering endpoints
 - Event listing by scene
 - Event status transitions (scheduled → live → ended)
-- Event cancellation endpoint
 - Recurring events support
 - Event attendance/RSVP functionality
 - Integration with LiveKit for live streaming events
