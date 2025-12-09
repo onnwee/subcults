@@ -14,6 +14,7 @@ import (
 
 	"github.com/onnwee/subcults/internal/api"
 	"github.com/onnwee/subcults/internal/middleware"
+	"github.com/onnwee/subcults/internal/scene"
 )
 
 func main() {
@@ -44,8 +45,38 @@ func main() {
 	logger := middleware.NewLogger(env)
 	slog.SetDefault(logger)
 
+	// Initialize repositories
+	eventRepo := scene.NewInMemoryEventRepository()
+	sceneRepo := scene.NewInMemorySceneRepository()
+
+	// Initialize handlers
+	eventHandlers := api.NewEventHandlers(eventRepo, sceneRepo)
+
 	// Create HTTP server with routes
 	mux := http.NewServeMux()
+
+	// Event routes
+	mux.HandleFunc("/events", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost:
+			eventHandlers.CreateEvent(w, r)
+		default:
+			ctx := middleware.SetErrorCode(r.Context(), api.ErrCodeBadRequest)
+			api.WriteError(w, ctx, http.StatusMethodNotAllowed, api.ErrCodeBadRequest, "Method not allowed")
+		}
+	})
+
+	mux.HandleFunc("/events/", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			eventHandlers.GetEvent(w, r)
+		case http.MethodPatch:
+			eventHandlers.UpdateEvent(w, r)
+		default:
+			ctx := middleware.SetErrorCode(r.Context(), api.ErrCodeBadRequest)
+			api.WriteError(w, ctx, http.StatusMethodNotAllowed, api.ErrCodeBadRequest, "Method not allowed")
+		}
+	})
 
 	// Health check endpoint
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
