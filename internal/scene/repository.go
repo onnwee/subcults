@@ -4,6 +4,7 @@ package scene
 
 import (
 	"errors"
+	"strings"
 	"sync"
 	"time"
 
@@ -263,17 +264,21 @@ func (r *InMemorySceneRepository) Delete(id string) error {
 
 // ExistsByOwnerAndName checks if a non-deleted scene with the given name
 // exists for the specified owner. Used for duplicate name validation.
+// Performs case-insensitive comparison to prevent names differing only by case.
 // excludeID allows checking for duplicates while excluding a specific scene
 // (useful when updating a scene's name).
 func (r *InMemorySceneRepository) ExistsByOwnerAndName(ownerDID, name string, excludeID string) (bool, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
+	// Normalize name to lowercase for case-insensitive comparison
+	normalizedName := strings.ToLower(name)
+	
 	for id, scene := range r.scenes {
 		if id == excludeID {
 			continue
 		}
-		if scene.DeletedAt == nil && scene.OwnerDID == ownerDID && scene.Name == name {
+		if scene.DeletedAt == nil && scene.OwnerDID == ownerDID && strings.ToLower(scene.Name) == normalizedName {
 			return true, nil
 		}
 	}

@@ -185,8 +185,82 @@ func TestCreateScene_DuplicateName(t *testing.T) {
 		t.Fatalf("failed to decode error response: %v", err)
 	}
 
-	if errResp.Error.Code != ErrCodeConflict {
-		t.Errorf("expected error code %s, got %s", ErrCodeConflict, errResp.Error.Code)
+	if errResp.Error.Code != ErrCodeDuplicateSceneName {
+		t.Errorf("expected error code %s, got %s", ErrCodeDuplicateSceneName, errResp.Error.Code)
+	}
+}
+
+// TestCreateScene_DuplicateNameCaseInsensitive tests case-insensitive duplicate name rejection.
+func TestCreateScene_DuplicateNameCaseInsensitive(t *testing.T) {
+	membershipRepo := membership.NewInMemoryMembershipRepository()
+	streamRepo := stream.NewInMemorySessionRepository()
+
+	tests := []struct {
+		name      string
+		firstName string
+		dupeNames []string
+	}{
+		{
+			name:      "uppercase duplicate",
+			firstName: "Test Scene",
+			dupeNames: []string{"TEST SCENE", "test scene", "TeSt ScEnE"},
+		},
+		{
+			name:      "lowercase duplicate",
+			firstName: "my scene",
+			dupeNames: []string{"MY SCENE", "My Scene", "mY sCeNe"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create fresh repo for each test
+			repo := scene.NewInMemorySceneRepository()
+			handlers := NewSceneHandlers(repo, membershipRepo, streamRepo)
+
+			// Create first scene
+			firstReq := CreateSceneRequest{
+				Name:          tt.firstName,
+				OwnerDID:      "did:plc:test123",
+				CoarseGeohash: "dr5regw",
+			}
+
+			body, _ := json.Marshal(firstReq)
+			req := httptest.NewRequest(http.MethodPost, "/scenes", bytes.NewReader(body))
+			w := httptest.NewRecorder()
+			handlers.CreateScene(w, req)
+
+			if w.Code != http.StatusCreated {
+				t.Fatalf("first creation failed with status %d", w.Code)
+			}
+
+			// Try to create scenes with case variations
+			for _, dupeName := range tt.dupeNames {
+				dupeReq := CreateSceneRequest{
+					Name:          dupeName,
+					OwnerDID:      "did:plc:test123",
+					CoarseGeohash: "dr5regw",
+				}
+
+				body, _ := json.Marshal(dupeReq)
+				req := httptest.NewRequest(http.MethodPost, "/scenes", bytes.NewReader(body))
+				w := httptest.NewRecorder()
+				handlers.CreateScene(w, req)
+
+				if w.Code != http.StatusConflict {
+					t.Errorf("expected status 409 for '%s', got %d", dupeName, w.Code)
+				}
+
+				var errResp ErrorResponse
+				if err := json.NewDecoder(w.Body).Decode(&errResp); err != nil {
+					t.Fatalf("failed to decode error response: %v", err)
+				}
+
+				if errResp.Error.Code != ErrCodeDuplicateSceneName {
+					t.Errorf("expected error code %s for '%s', got %s", ErrCodeDuplicateSceneName, dupeName, errResp.Error.Code)
+				}
+			}
+		})
 	}
 }
 
@@ -202,25 +276,25 @@ func TestCreateScene_InvalidName(t *testing.T) {
 			name:        "too short",
 			sceneName:   "ab",
 			wantStatus:  http.StatusBadRequest,
-			wantErrCode: ErrCodeValidation,
+			wantErrCode: ErrCodeInvalidSceneName,
 		},
 		{
 			name:        "too long",
 			sceneName:   strings.Repeat("a", 65),
 			wantStatus:  http.StatusBadRequest,
-			wantErrCode: ErrCodeValidation,
+			wantErrCode: ErrCodeInvalidSceneName,
 		},
 		{
 			name:        "invalid characters",
 			sceneName:   "Scene<script>alert('xss')</script>",
 			wantStatus:  http.StatusBadRequest,
-			wantErrCode: ErrCodeValidation,
+			wantErrCode: ErrCodeInvalidSceneName,
 		},
 		{
 			name:        "special chars not allowed",
 			sceneName:   "Scene@#$%",
 			wantStatus:  http.StatusBadRequest,
-			wantErrCode: ErrCodeValidation,
+			wantErrCode: ErrCodeInvalidSceneName,
 		},
 	}
 
@@ -460,8 +534,8 @@ func TestUpdateScene_DuplicateName(t *testing.T) {
 		t.Fatalf("failed to decode error response: %v", err)
 	}
 
-	if errResp.Error.Code != ErrCodeConflict {
-		t.Errorf("expected error code %s, got %s", ErrCodeConflict, errResp.Error.Code)
+	if errResp.Error.Code != ErrCodeDuplicateSceneName {
+		t.Errorf("expected error code %s, got %s", ErrCodeDuplicateSceneName, errResp.Error.Code)
 	}
 }
 
@@ -578,13 +652,13 @@ func TestValidateSceneName(t *testing.T) {
 		{"valid with numbers", "Scene 123", false},
 		{"valid with dash", "Test-Scene", false},
 		{"valid with underscore", "Test_Scene", false},
-		{"valid with apostrophe", "Mike's Scene", false},
 		{"valid with period", "Scene v1.0", false},
-		{"valid with ampersand", "Rock & Roll", false},
 		{"too short", "ab", true},
 		{"too long", strings.Repeat("a", 65), true},
 		{"invalid chars", "Scene<>", true},
 		{"invalid chars @", "Scene@email", true},
+		{"invalid apostrophe", "Mike's Scene", true},
+		{"invalid ampersand", "Rock & Roll", true},
 	}
 
 	for _, tt := range tests {

@@ -41,6 +41,12 @@ const (
 
 	// ErrCodeSceneDeleted indicates the scene has been deleted.
 	ErrCodeSceneDeleted = "scene_deleted"
+
+	// ErrCodeInvalidSceneName indicates scene name validation failure.
+	ErrCodeInvalidSceneName = "invalid_scene_name"
+
+	// ErrCodeDuplicateSceneName indicates scene name already exists for owner.
+	ErrCodeDuplicateSceneName = "duplicate_scene_name"
 )
 
 // ErrorResponse represents the standard error response format.
