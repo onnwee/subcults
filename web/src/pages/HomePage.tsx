@@ -1,0 +1,24 @@
+/**
+ * HomePage Component
+ * Main map view showing scenes and events
+ */
+
+import React, { useRef } from 'react';
+import { MapView, type MapViewHandle } from '../components/MapView';
+
+export const HomePage: React.FC = () => {
+  // MapViewHandle ref - reserved for future map interactions (flyTo, etc.)
+  const mapRef = useRef<MapViewHandle>(null);
+
+  return (
+    <div style={{ height: '100%', width: '100%' }}>
+      <MapView
+        ref={mapRef}
+        enableGeolocation={false}
+        onLoad={() => {
+          // Map loaded successfully
+        }}
+      />
+    </div>
+  );
+};
