@@ -47,6 +47,9 @@ const (
 
 	// ErrCodeDuplicateSceneName indicates scene name already exists for owner.
 	ErrCodeDuplicateSceneName = "duplicate_scene_name"
+	
+	// ErrCodeInvalidTimeRange indicates event start time is not before end time.
+	ErrCodeInvalidTimeRange = "invalid_time_range"
 )
 
 // ErrorResponse represents the standard error response format.
