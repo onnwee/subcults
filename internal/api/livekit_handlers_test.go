@@ -249,7 +249,7 @@ func TestIssueToken_InvalidRoomID(t *testing.T) {
 		},
 		{
 			name:   "room ID too long",
-			roomID: "a" + string(make([]byte, 128)), // 129 characters
+			roomID: strings.Repeat("a", 129), // 129 characters
 		},
 	}
 
@@ -365,7 +365,7 @@ func TestValidateRoomID(t *testing.T) {
 		},
 		{
 			name:   "invalid too long",
-			roomID: string(make([]byte, 129)),
+			roomID: strings.Repeat("a", 129),
 			valid:  false,
 		},
 	}
