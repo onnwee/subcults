@@ -41,6 +41,11 @@ function generateToastId(): string {
 }
 
 /**
+ * Track auto-dismiss timers to prevent memory leaks
+ */
+const dismissTimers = new Map<string, NodeJS.Timeout>();
+
+/**
  * Toast notification store
  */
 export const useToastStore = create<ToastStore>((set) => ({
@@ -62,23 +67,36 @@ export const useToastStore = create<ToastStore>((set) => ({
 
     // Auto-dismiss if duration is specified
     if (newToast.duration !== undefined && newToast.duration > 0) {
-      setTimeout(() => {
+      const timerId = setTimeout(() => {
+        dismissTimers.delete(id);
         set((state) => ({
           toasts: state.toasts.filter((t) => t.id !== id),
         }));
       }, newToast.duration);
+      dismissTimers.set(id, timerId);
     }
 
     return id;
   },
 
   removeToast: (id) => {
+    // Cancel auto-dismiss timer if it exists
+    const timerId = dismissTimers.get(id);
+    if (timerId) {
+      clearTimeout(timerId);
+      dismissTimers.delete(id);
+    }
+    
     set((state) => ({
       toasts: state.toasts.filter((t) => t.id !== id),
     }));
   },
 
   clearAll: () => {
+    // Clear all pending timers
+    dismissTimers.forEach((timerId) => clearTimeout(timerId));
+    dismissTimers.clear();
+    
     set({ toasts: [] });
   },
 }));

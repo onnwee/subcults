@@ -69,12 +69,12 @@ export class ErrorBoundary extends Component<Props, State> {
   componentDidUpdate(_prevProps: Props, prevState: State) {
     // Focus the reload button when error state changes
     if (!prevState.hasError && this.state.hasError && this.errorButtonRef.current) {
-      // Note: setTimeout ensures focus happens after DOM is fully updated
-      setTimeout(() => {
+      // Use requestAnimationFrame for reliable focus timing after DOM update
+      requestAnimationFrame(() => {
         if (this.errorButtonRef.current) {
           this.errorButtonRef.current.focus();
         }
-      }, 0);
+      });
     }
   }
 

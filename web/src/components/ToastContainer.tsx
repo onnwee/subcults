@@ -100,6 +100,20 @@ function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: (id: string)
   );
 }
 
+// Animation keyframes - defined once at module level
+const TOAST_ANIMATIONS = `
+  @keyframes slideIn {
+    from {
+      transform: translateX(100%);
+      opacity: 0;
+    }
+    to {
+      transform: translateX(0);
+      opacity: 1;
+    }
+  }
+`;
+
 /**
  * Toast container component
  * Renders all active toasts in a fixed position
@@ -114,18 +128,7 @@ export function ToastContainer() {
 
   return (
     <>
-      <style>{`
-        @keyframes slideIn {
-          from {
-            transform: translateX(100%);
-            opacity: 0;
-          }
-          to {
-            transform: translateX(0);
-            opacity: 1;
-          }
-        }
-      `}</style>
+      <style>{TOAST_ANIMATIONS}</style>
       <div
         aria-label="Notifications"
         role="region"
