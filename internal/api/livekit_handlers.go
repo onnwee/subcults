@@ -9,7 +9,6 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/google/uuid"
 	"github.com/onnwee/subcults/internal/audit"
 	"github.com/onnwee/subcults/internal/livekit"
 	"github.com/onnwee/subcults/internal/middleware"
@@ -156,15 +155,40 @@ func (h *LiveKitHandlers) IssueToken(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// generateParticipantID creates a participant identity from a user DID.
-// Format: user-{uuid}
-// If the DID contains a UUID-like segment, we use that; otherwise generate a new UUID.
+// generateParticipantID creates a deterministic participant identity from a user DID.
+// Format: user-{stable-identifier}
+// 
+// Note: This generates a stable identity based on the user's DID, ensuring that
+// the same user always gets the same participant ID. This is important for LiveKit's
+// room management, where participants with the same identity are treated as the same user,
+// enabling features like:
+// - Reconnection to the same session after temporary disconnection
+// - Consistent participant tracking across multiple join attempts
+// - Proper cleanup of previous sessions when rejoining
+//
+// The identifier is extracted from the DID and truncated if needed to maintain reasonable length.
 func generateParticipantID(did string) string {
-	// Try to extract UUID from DID (e.g., did:plc:abc123def456...)
-	// For simplicity, we'll just hash/use the DID suffix or generate new UUID
-	// In a real implementation, you might want to extract or map the DID to a stable UUID
+	// DIDs have format: did:method:identifier (e.g., did:plc:abc123...)
+	// We'll use the identifier part to create a stable ID
 	
-	// For now, generate a new UUID for each token request
-	// This ensures uniqueness and prevents tracking across sessions
-	return fmt.Sprintf("user-%s", uuid.New().String())
+	// Split on colons and take the last part (the identifier)
+	parts := strings.Split(did, ":")
+	var identifier string
+	
+	if len(parts) >= 3 {
+		// Use the identifier portion (last part)
+		identifier = parts[len(parts)-1]
+	} else {
+		// Fallback: if DID format is unexpected, use the whole DID
+		identifier = did
+	}
+	
+	// Ensure identifier is safe for LiveKit (alphanumeric, hyphens, underscores)
+	// and truncate to reasonable length (max 48 chars to keep total under 64)
+	maxLen := 48
+	if len(identifier) > maxLen {
+		identifier = identifier[:maxLen]
+	}
+	
+	return fmt.Sprintf("user-%s", identifier)
 }

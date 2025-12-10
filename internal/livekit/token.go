@@ -2,6 +2,7 @@
 package livekit
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -123,16 +124,13 @@ func (s *TokenService) GenerateToken(req *TokenRequest) (*TokenResponse, error) 
 }
 
 // formatMetadata converts a metadata map to a JSON string for the token.
-// This is a simple implementation that serializes common types.
+// Uses proper JSON marshaling to handle escaping and special characters.
 func formatMetadata(metadata map[string]interface{}) string {
-	// For simplicity, we'll just format key-value pairs as a JSON-like string
-	// In production, you might want to use proper JSON marshaling
-	result := ""
-	for k, v := range metadata {
-		if result != "" {
-			result += ","
-		}
-		result += fmt.Sprintf(`"%s":"%v"`, k, v)
+	// Convert to JSON using standard library for proper escaping
+	data, err := json.Marshal(metadata)
+	if err != nil {
+		// Fallback to empty JSON object if marshaling fails
+		return "{}"
 	}
-	return "{" + result + "}"
+	return string(data)
 }

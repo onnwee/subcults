@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -374,6 +375,57 @@ func TestValidateRoomID(t *testing.T) {
 			result := validateRoomID(tt.roomID)
 			if result != tt.valid {
 				t.Errorf("expected validateRoomID(%q) = %v, got %v", tt.roomID, tt.valid, result)
+			}
+		})
+	}
+}
+
+func TestGenerateParticipantID(t *testing.T) {
+	tests := []struct {
+		name        string
+		did         string
+		expectStart string
+	}{
+		{
+			name:        "standard DID format",
+			did:         "did:plc:abc123def456",
+			expectStart: "user-abc123def456",
+		},
+		{
+			name:        "DID with long identifier",
+			did:         "did:plc:verylongidentifier123456789012345678901234567890",
+			expectStart: "user-verylongidentifier1234567890123456789012345678",
+		},
+		{
+			name:        "short DID",
+			did:         "did:plc:abc",
+			expectStart: "user-abc",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := generateParticipantID(tt.did)
+			if !strings.HasPrefix(result, "user-") {
+				t.Errorf("expected participant ID to start with 'user-', got %s", result)
+			}
+
+			// Verify determinism: same DID should produce same ID
+			result2 := generateParticipantID(tt.did)
+			if result != result2 {
+				t.Errorf("expected deterministic ID generation, got %s and %s", result, result2)
+			}
+
+			// Verify different DIDs produce different IDs (when not truncated)
+			differentDID := tt.did + "x"
+			result3 := generateParticipantID(differentDID)
+			
+			// Only check if they're different when the change would be preserved after truncation
+			// For long identifiers that get truncated, the extra 'x' might be cut off
+			if len(strings.Split(tt.did, ":")[len(strings.Split(tt.did, ":"))-1]) < 48 {
+				if result == result3 {
+					t.Errorf("expected different DIDs to produce different IDs, got %s for both", result)
+				}
 			}
 		})
 	}
