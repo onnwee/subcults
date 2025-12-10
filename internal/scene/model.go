@@ -113,3 +113,20 @@ func (e *Event) EnforceLocationConsent() *Event {
 func (s *Scene) IsOwner(userDID string) bool {
 	return s.OwnerDID == userDID
 }
+
+// RSVP represents a user's attendance intent for an event.
+type RSVP struct {
+	EventID string `json:"event_id"`
+	// UserID stores the user's DID (Decentralized Identifier), not a UUID or FK to a users table.
+	// This allows guest RSVPs and aligns with the database schema (see migration 000012 comment).
+	UserID    string     `json:"user_id"`
+	Status    string     `json:"status"` // "going" or "maybe"
+	CreatedAt *time.Time `json:"created_at,omitempty"`
+	UpdatedAt *time.Time `json:"updated_at,omitempty"`
+}
+
+// RSVPCounts represents aggregated RSVP counts by status.
+type RSVPCounts struct {
+	Going int `json:"going"`
+	Maybe int `json:"maybe"`
+}

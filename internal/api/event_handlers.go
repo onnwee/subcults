@@ -60,15 +60,23 @@ type EventHandlers struct {
 	eventRepo scene.EventRepository
 	sceneRepo scene.SceneRepository
 	auditRepo audit.Repository
+	rsvpRepo  scene.RSVPRepository
 }
 
 // NewEventHandlers creates a new EventHandlers instance.
-func NewEventHandlers(eventRepo scene.EventRepository, sceneRepo scene.SceneRepository, auditRepo audit.Repository) *EventHandlers {
+func NewEventHandlers(eventRepo scene.EventRepository, sceneRepo scene.SceneRepository, auditRepo audit.Repository, rsvpRepo scene.RSVPRepository) *EventHandlers {
 	return &EventHandlers{
 		eventRepo: eventRepo,
 		sceneRepo: sceneRepo,
 		auditRepo: auditRepo,
+		rsvpRepo:  rsvpRepo,
 	}
+}
+
+// EventWithRSVPCounts represents an event with aggregated RSVP counts.
+type EventWithRSVPCounts struct {
+	*scene.Event
+	RSVPCounts *scene.RSVPCounts `json:"rsvp_counts"`
 }
 
 // validateEventTitle validates event title according to requirements.
@@ -418,10 +426,25 @@ func (h *EventHandlers) GetEvent(w http.ResponseWriter, r *http.Request) {
 	// Privacy enforcement is handled by the repository
 	// The repository automatically enforces location consent via EnforceLocationConsent()
 
-	// Return event
+	// Get RSVP counts for the event
+	rsvpCounts, err := h.rsvpRepo.GetCountsByEvent(eventID)
+	if err != nil {
+		slog.ErrorContext(r.Context(), "failed to get RSVP counts", "error", err, "event_id", eventID)
+		ctx := middleware.SetErrorCode(r.Context(), ErrCodeInternal)
+		WriteError(w, ctx, http.StatusInternalServerError, ErrCodeInternal, "Failed to retrieve RSVP counts")
+		return
+	}
+
+	// Create response with event and RSVP counts
+	response := EventWithRSVPCounts{
+		Event:      foundEvent,
+		RSVPCounts: rsvpCounts,
+	}
+
+	// Return event with RSVP counts
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(foundEvent); err != nil {
+	if err := json.NewEncoder(w).Encode(response); err != nil {
 		// Log error but response already started
 		slog.ErrorContext(r.Context(), "failed to encode event response", "error", err)
 	}
