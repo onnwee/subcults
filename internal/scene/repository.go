@@ -4,6 +4,7 @@ package scene
 
 import (
 	"errors"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -352,6 +353,16 @@ func NewInMemoryEventRepository() *InMemoryEventRepository {
 	}
 }
 
+// copyEvent creates a deep copy of an event to avoid external modification.
+func copyEvent(event *Event) *Event {
+	eventCopy := *event
+	if event.PrecisePoint != nil {
+		pointCopy := *event.PrecisePoint
+		eventCopy.PrecisePoint = &pointCopy
+	}
+	return &eventCopy
+}
+
 // Insert stores a new event, enforcing location consent.
 // If allow_precise is false, precise_point will be set to NULL.
 func (r *InMemoryEventRepository) Insert(event *Event) error {
@@ -573,13 +584,7 @@ func (r *InMemoryEventRepository) SearchByBboxAndTime(minLng, minLat, maxLng, ma
 			lat := event.PrecisePoint.Lat
 			lng := event.PrecisePoint.Lng
 			if lng >= minLng && lng <= maxLng && lat >= minLat && lat <= maxLat {
-				// Create a copy to avoid external modification
-				eventCopy := *event
-				if event.PrecisePoint != nil {
-					pointCopy := *event.PrecisePoint
-					eventCopy.PrecisePoint = &pointCopy
-				}
-				results = append(results, &eventCopy)
+				results = append(results, copyEvent(event))
 			}
 		}
 		// TODO: Also check coarse_geohash intersection for events without precise_point
@@ -587,15 +592,13 @@ func (r *InMemoryEventRepository) SearchByBboxAndTime(minLng, minLat, maxLng, ma
 	}
 
 	// Sort by starts_at ascending, then by ID for stable ordering
-	// Using a simple bubble sort for in-memory implementation
-	for i := 0; i < len(results)-1; i++ {
-		for j := i + 1; j < len(results); j++ {
-			if results[i].StartsAt.After(results[j].StartsAt) ||
-				(results[i].StartsAt.Equal(results[j].StartsAt) && results[i].ID > results[j].ID) {
-				results[i], results[j] = results[j], results[i]
-			}
+	// Using stdlib sort for O(n log n) performance
+	sort.Slice(results, func(i, j int) bool {
+		if results[i].StartsAt.Equal(results[j].StartsAt) {
+			return results[i].ID < results[j].ID
 		}
-	}
+		return results[i].StartsAt.Before(results[j].StartsAt)
+	})
 
 	// Apply cursor filter AFTER sorting for stable pagination
 	if !cursorTime.IsZero() {
