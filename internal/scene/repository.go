@@ -89,6 +89,11 @@ type EventRepository interface {
 	// Returns ErrEventNotFound if event doesn't exist.
 	// Idempotent: returns nil if event is already cancelled.
 	Cancel(id string, reason *string) error
+
+	// SearchByBboxAndTime searches for events within a bounding box and time range.
+	// Filters out cancelled events and applies pagination.
+	// Returns events sorted by starts_at ascending.
+	SearchByBboxAndTime(minLng, minLat, maxLng, maxLat float64, from, to time.Time, limit int, cursor string) ([]*Event, string, error)
 }
 
 // RSVPRepository defines the interface for RSVP data operations.
@@ -510,6 +515,122 @@ func (r *InMemoryEventRepository) Cancel(id string, reason *string) error {
 	event.UpdatedAt = &now
 
 	return nil
+}
+
+// SearchByBboxAndTime searches for events within a bounding box and time range.
+// Filters out cancelled events and applies pagination.
+// Returns events sorted by starts_at ascending.
+func (r *InMemoryEventRepository) SearchByBboxAndTime(minLng, minLat, maxLng, maxLat float64, from, to time.Time, limit int, cursor string) ([]*Event, string, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	// Initialize empty slice to ensure non-nil return
+	results := make([]*Event, 0)
+	var cursorTime time.Time
+	var cursorID string
+
+	// Parse cursor if provided (format: "RFC3339|ID")
+	// Using | as separator to avoid conflicts with colons in RFC3339 timestamps
+	if cursor != "" {
+		parts := strings.Split(cursor, "|")
+		if len(parts) == 2 {
+			parsedTime, err := time.Parse(time.RFC3339, parts[0])
+			if err == nil {
+				// Truncate to second precision to match RFC3339 format
+				// This ensures comparison works correctly
+				cursorTime = parsedTime.Truncate(time.Second)
+				cursorID = parts[1]
+			} else {
+				// Cursor parsing failed - log it but continue with no cursor
+				// In production, we'd log this properly
+			}
+		} else {
+			// Invalid cursor format - log it but continue with no cursor
+		}
+	}
+
+	// Collect matching events
+	for _, event := range r.events {
+		// Skip cancelled events
+		if event.Status == "cancelled" {
+			continue
+		}
+
+		// Skip deleted events
+		if event.DeletedAt != nil {
+			continue
+		}
+
+		// Check time range: event starts_at must be between from and to
+		if event.StartsAt.Before(from) || event.StartsAt.After(to) {
+			continue
+		}
+
+		// Check bounding box
+		// For in-memory implementation, check if precise_point is within bbox
+		// In a real PostGIS implementation, this would use ST_MakeEnvelope and geohash intersection
+		if event.PrecisePoint != nil {
+			lat := event.PrecisePoint.Lat
+			lng := event.PrecisePoint.Lng
+			if lng >= minLng && lng <= maxLng && lat >= minLat && lat <= maxLat {
+				// Create a copy to avoid external modification
+				eventCopy := *event
+				if event.PrecisePoint != nil {
+					pointCopy := *event.PrecisePoint
+					eventCopy.PrecisePoint = &pointCopy
+				}
+				results = append(results, &eventCopy)
+			}
+		}
+		// TODO: Also check coarse_geohash intersection for events without precise_point
+		// This would require geohash bounding box intersection logic
+	}
+
+	// Sort by starts_at ascending, then by ID for stable ordering
+	// Using a simple bubble sort for in-memory implementation
+	for i := 0; i < len(results)-1; i++ {
+		for j := i + 1; j < len(results); j++ {
+			if results[i].StartsAt.After(results[j].StartsAt) ||
+				(results[i].StartsAt.Equal(results[j].StartsAt) && results[i].ID > results[j].ID) {
+				results[i], results[j] = results[j], results[i]
+			}
+		}
+	}
+
+	// Apply cursor filter AFTER sorting for stable pagination
+	if !cursorTime.IsZero() {
+		filtered := make([]*Event, 0)
+		for _, event := range results {
+			// Truncate event time to second precision for comparison
+			eventTime := event.StartsAt.Truncate(time.Second)
+			
+			// Skip events before cursor time
+			if eventTime.Before(cursorTime) {
+				continue
+			}
+			// If same time as cursor, skip events with ID <= cursor ID (for stable ordering)
+			if eventTime.Equal(cursorTime) && event.ID <= cursorID {
+				continue
+			}
+			// Event is after cursor position, include it
+			filtered = append(filtered, event)
+		}
+		results = filtered
+	}
+
+	// Apply limit and generate next cursor
+	var nextCursor string
+	if len(results) > limit {
+		// We have more results than requested, truncate and set cursor
+		if limit > 0 {
+			lastEvent := results[limit-1]
+			// Use | as separator to avoid conflicts with colons in RFC3339 timestamps
+			nextCursor = lastEvent.StartsAt.Format(time.RFC3339) + "|" + lastEvent.ID
+			results = results[:limit]
+		}
+	}
+
+	return results, nextCursor, nil
 }
 
 // InMemoryRSVPRepository is an in-memory implementation of RSVPRepository.
