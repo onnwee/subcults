@@ -19,17 +19,13 @@ export interface UseSearchOptions {
    * Maximum results per category (default: 5)
    */
   limit?: number;
-  /**
-   * Enable automatic search on query change (default: true)
-   */
-  autoSearch?: boolean;
 }
 
 export interface UseSearchResult {
   results: SearchResults;
   loading: boolean;
   error: string | null;
-  search: (query: string) => Promise<void>;
+  search: (query: string) => void;
   clear: () => void;
 }
 
@@ -118,8 +114,6 @@ export function useSearch(options: UseSearchOptions = {}): UseSearchResult {
       debounceTimeoutRef.current = setTimeout(() => {
         executeSearch(newQuery);
       }, debounceMs);
-
-      return Promise.resolve();
     },
     [debounceMs, executeSearch]
   );
