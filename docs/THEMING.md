@@ -35,14 +35,28 @@ CSS variables enable runtime theme switching without rebuilding:
 }
 ```
 
+**Theme Transition Utility**: Use the `.theme-transition` class on elements that need smooth color transitions when toggling dark mode. This avoids performance issues from applying transitions to all elements.
+
+```tsx
+<div className="bg-background text-foreground theme-transition">
+  Smooth theme transitions
+</div>
+```
+
 ### 3. Theme Store (`stores/themeStore.ts`)
 
 Zustand store managing theme state:
 
 - `theme`: Current theme ('light' | 'dark')
-- `setTheme()`: Set theme explicitly
-- `toggleTheme()`: Toggle between light/dark
-- `initializeTheme()`: Initialize from localStorage or system preference
+- `setTheme()`: Set theme explicitly (persists to localStorage)
+- `toggleTheme()`: Toggle between light/dark (persists to localStorage)
+- `initializeTheme()`: Initialize from localStorage or system preference (only persists if theme was previously manually set)
+
+**Key Behavior**: The store distinguishes between:
+- **Manual theme selection**: When user explicitly sets theme via toggle (persisted to localStorage)
+- **System preference**: Initial theme from `prefers-color-scheme` (not persisted, allows auto-switching)
+
+This ensures system preference auto-switching works correctly while respecting user's manual choices.
 
 ### 4. ThemeProvider Component
 
@@ -74,11 +88,11 @@ For static colors and styles:
 
 ### Using CSS Variables for Theme-Aware Colors
 
-For colors that change with dark mode:
+For colors that change with dark mode, add the `theme-transition` class for smooth transitions:
 
 ```tsx
-<div className="bg-background text-foreground border border-border">
-  Theme-aware element
+<div className="bg-background text-foreground border border-border theme-transition">
+  Theme-aware element with smooth transitions
 </div>
 ```
 
@@ -188,11 +202,11 @@ theme: {
 
 ### 2. Use CSS Variables for Dynamic Values
 
-**DO**: Use CSS variables for theme-aware colors
+**DO**: Use CSS variables with theme-transition class for theme-aware colors
 
 ```tsx
-// ✅ Good - Automatically adapts to dark mode
-<div className="bg-background text-foreground">Content</div>
+// ✅ Good - Automatically adapts to dark mode with smooth transition
+<div className="bg-background text-foreground theme-transition">Content</div>
 ```
 
 **DON'T**: Use conditional classes based on theme
@@ -204,12 +218,32 @@ theme: {
 </div>
 ```
 
-### 3. Leverage Tailwind's Dark Mode
+### 3. Optimize Performance with Selective Transitions
 
-**DO**: Use `dark:` prefix for overrides
+**DO**: Apply `theme-transition` class only to elements that change colors
 
 ```tsx
-<button className="bg-blue-500 dark:bg-blue-700 hover:bg-blue-600 dark:hover:bg-blue-800">
+<section className="bg-background-secondary theme-transition">
+  <h2>Section Title</h2>
+  <p className="text-foreground">Content</p>
+</section>
+```
+
+**DON'T**: Apply transitions globally with universal selector
+
+```css
+/* ❌ Bad - Causes performance issues */
+* {
+  transition: all 250ms;
+}
+```
+
+### 3. Leverage Tailwind's Dark Mode
+
+**DO**: Use `dark:` prefix for overrides with theme-transition
+
+```tsx
+<button className="bg-blue-500 dark:bg-blue-700 hover:bg-blue-600 dark:hover:bg-blue-800 theme-transition">
   Button with hover states
 </button>
 ```
@@ -230,12 +264,22 @@ const theme = useTheme();
 const { theme, setTheme, toggleTheme } = useThemeStore();
 ```
 
+### 5. System Preference Auto-Switching
+
+The theme system distinguishes between:
+- **Manual selection**: User explicitly toggled theme (persisted to localStorage)
+- **System preference**: Initial theme from `prefers-color-scheme` (not persisted)
+
+When no manual selection exists, the app auto-switches with system preference changes. Once user manually sets a preference, auto-switching is disabled until localStorage is cleared.
+
 ### 5. Accessibility First
 
 - Always provide ARIA labels on theme toggle
 - Ensure sufficient color contrast in both modes
 - Test keyboard navigation
 - Respect `prefers-reduced-motion`
+- Use `theme-transition` class sparingly to avoid performance issues
+- System preference auto-switching respects user's manual choices
 
 ## Testing
 

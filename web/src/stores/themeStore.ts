@@ -26,26 +26,27 @@ const THEME_STORAGE_KEY = 'subcults-theme';
 
 /**
  * Get initial theme from localStorage or system preference
+ * Returns theme and whether it was manually set by user
  */
-function getInitialTheme(): Theme {
+function getInitialTheme(): { theme: Theme; isManuallySet: boolean } {
   // Check localStorage first
   const stored = localStorage.getItem(THEME_STORAGE_KEY);
   if (stored === 'light' || stored === 'dark') {
-    return stored;
+    return { theme: stored, isManuallySet: true };
   }
 
   // Fall back to system preference
   if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-    return 'dark';
+    return { theme: 'dark', isManuallySet: false };
   }
 
-  return 'light';
+  return { theme: 'light', isManuallySet: false };
 }
 
 /**
- * Apply theme to document
+ * Apply theme to document (DOM only, no persistence)
  */
-function applyTheme(theme: Theme): void {
+function applyThemeToDOM(theme: Theme): void {
   const root = document.documentElement;
   
   if (theme === 'dark') {
@@ -53,8 +54,12 @@ function applyTheme(theme: Theme): void {
   } else {
     root.classList.remove('dark');
   }
-  
-  // Persist to localStorage
+}
+
+/**
+ * Persist theme to localStorage
+ */
+function persistTheme(theme: Theme): void {
   localStorage.setItem(THEME_STORAGE_KEY, theme);
 }
 
@@ -62,11 +67,12 @@ function applyTheme(theme: Theme): void {
  * Theme store with dark mode management
  */
 export const useThemeStore = create<ThemeStore>((set, get) => ({
-  theme: getInitialTheme(),
+  theme: getInitialTheme().theme,
 
   setTheme: (theme: Theme) => {
     set({ theme });
-    applyTheme(theme);
+    applyThemeToDOM(theme);
+    persistTheme(theme); // Only persist when user explicitly sets theme
   },
 
   toggleTheme: () => {
@@ -76,9 +82,13 @@ export const useThemeStore = create<ThemeStore>((set, get) => ({
   },
 
   initializeTheme: () => {
-    const theme = getInitialTheme();
+    const { theme, isManuallySet } = getInitialTheme();
     set({ theme });
-    applyTheme(theme);
+    applyThemeToDOM(theme);
+    // Only persist if it was already manually set
+    if (isManuallySet) {
+      persistTheme(theme);
+    }
   },
 }));
 

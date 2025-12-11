@@ -78,11 +78,14 @@
 }
 
 /**
- * Theme Transition
- * Smooth color transitions when toggling dark mode
+ * Theme Transition Utility Class
+ * Apply to elements that need smooth color transitions when toggling dark mode
+ * Usage: className="theme-transition"
  */
-* {
-  transition-property: background-color, border-color, color;
-  transition-duration: 250ms;
-  transition-timing-function: ease-in-out;
+@layer utilities {
+  .theme-transition {
+    transition-property: background-color, border-color, color;
+    transition-duration: 250ms;
+    transition-timing-function: ease-in-out;
+  }
 }

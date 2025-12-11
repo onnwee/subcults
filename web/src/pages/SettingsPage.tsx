@@ -11,13 +11,13 @@ export const SettingsPage: React.FC = () => {
   const theme = useTheme();
   
   return (
-    <div className="min-h-screen bg-background text-foreground p-8">
+    <div className="min-h-screen bg-background text-foreground p-8 theme-transition">
       <div className="max-w-4xl mx-auto">
         <h1 className="text-4xl font-bold mb-8 text-foreground">Settings</h1>
         
         <div className="space-y-6">
           {/* Appearance Section */}
-          <section className="bg-background-secondary border border-border rounded-lg p-6">
+          <section className="bg-background-secondary border border-border rounded-lg p-6 theme-transition">
             <h2 className="text-2xl font-semibold mb-4 text-foreground">Appearance</h2>
             
             <div className="flex items-center justify-between py-4 border-b border-border">
@@ -41,7 +41,7 @@ export const SettingsPage: React.FC = () => {
           </section>
           
           {/* Privacy Section */}
-          <section className="bg-background-secondary border border-border rounded-lg p-6">
+          <section className="bg-background-secondary border border-border rounded-lg p-6 theme-transition">
             <h2 className="text-2xl font-semibold mb-4 text-foreground">Privacy</h2>
             <p className="text-foreground-secondary">
               Privacy settings and location consent preferences will be displayed here.
@@ -49,7 +49,7 @@ export const SettingsPage: React.FC = () => {
           </section>
           
           {/* Notifications Section */}
-          <section className="bg-background-secondary border border-border rounded-lg p-6">
+          <section className="bg-background-secondary border border-border rounded-lg p-6 theme-transition">
             <h2 className="text-2xl font-semibold mb-4 text-foreground">Notifications</h2>
             <p className="text-foreground-secondary">
               Notification preferences and alert settings will be displayed here.
@@ -57,7 +57,7 @@ export const SettingsPage: React.FC = () => {
           </section>
           
           {/* Demo Section - Show theme colors */}
-          <section className="bg-background-secondary border border-border rounded-lg p-6">
+          <section className="bg-background-secondary border border-border rounded-lg p-6 theme-transition">
             <h2 className="text-2xl font-semibold mb-4 text-foreground">Theme Preview</h2>
             <p className="text-foreground-secondary mb-4">
               Preview how different UI elements look in the current theme:
@@ -65,30 +65,30 @@ export const SettingsPage: React.FC = () => {
             
             <div className="space-y-4">
               <div className="flex gap-4 flex-wrap">
-                <button className="bg-brand-primary hover:bg-brand-primary-dark text-white px-4 py-2 rounded-lg transition-colors">
+                <button className="bg-brand-primary hover:bg-brand-primary-dark text-white px-4 py-2 rounded-lg theme-transition">
                   Primary Button
                 </button>
-                <button className="bg-brand-accent hover:bg-brand-accent-dark text-white px-4 py-2 rounded-lg transition-colors">
+                <button className="bg-brand-accent hover:bg-brand-accent-dark text-white px-4 py-2 rounded-lg theme-transition">
                   Accent Button
                 </button>
-                <button className="bg-background-secondary hover:bg-underground-lighter border border-border text-foreground px-4 py-2 rounded-lg transition-colors">
+                <button className="bg-background-secondary hover:bg-underground-lighter border border-border text-foreground px-4 py-2 rounded-lg theme-transition">
                   Secondary Button
                 </button>
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-                <div className="bg-background border border-border p-4 rounded-lg">
+                <div className="bg-background border border-border p-4 rounded-lg theme-transition">
                   <p className="text-foreground font-semibold">Primary Text</p>
                   <p className="text-foreground-secondary text-sm mt-2">Secondary text</p>
                   <p className="text-foreground-muted text-sm mt-1">Muted text</p>
                 </div>
                 
-                <div className="bg-brand-underground border border-border p-4 rounded-lg">
+                <div className="bg-brand-underground border border-border p-4 rounded-lg theme-transition">
                   <p className="text-white font-semibold">Underground Card</p>
                   <p className="text-gray-300 text-sm mt-2">For dark aesthetic elements</p>
                 </div>
                 
-                <div className="bg-brand-primary border border-brand-primary-dark p-4 rounded-lg">
+                <div className="bg-brand-primary border border-brand-primary-dark p-4 rounded-lg theme-transition">
                   <p className="text-white font-semibold">Brand Card</p>
                   <p className="text-blue-100 text-sm mt-2">Primary brand colors</p>
                 </div>

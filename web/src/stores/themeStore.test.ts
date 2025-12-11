@@ -31,6 +31,8 @@ describe('themeStore', () => {
       });
 
       expect(result.current.theme).toBe('dark');
+      // Should still be in localStorage since it was manually set
+      expect(localStorage.getItem('subcults-theme')).toBe('dark');
     });
 
     it('falls back to system preference when no stored theme', () => {
@@ -56,6 +58,8 @@ describe('themeStore', () => {
       });
 
       expect(result.current.theme).toBe('dark');
+      // Should NOT persist to localStorage when derived from system preference
+      expect(localStorage.getItem('subcults-theme')).toBeNull();
     });
 
     it('defaults to light mode when no preference available', () => {
@@ -80,6 +84,8 @@ describe('themeStore', () => {
       });
 
       expect(result.current.theme).toBe('light');
+      // Should NOT persist to localStorage when derived from system preference
+      expect(localStorage.getItem('subcults-theme')).toBeNull();
     });
   });
 

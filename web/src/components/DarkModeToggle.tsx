@@ -36,7 +36,7 @@ export function DarkModeToggle({ showLabel = false, className = '' }: DarkModeTo
         inline-flex items-center gap-2 px-3 py-2 rounded-lg
         bg-background-secondary hover:bg-underground-lighter
         border border-border hover:border-border-hover
-        transition-all duration-250
+        theme-transition
         focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary
         ${className}
       `.trim()}
