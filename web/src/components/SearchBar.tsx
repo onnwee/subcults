@@ -8,6 +8,10 @@ import { useNavigate } from 'react-router-dom';
 import { useSearch } from '../hooks/useSearch';
 import type { SearchResultItem } from '../types/search';
 
+// Display constants
+const POST_TITLE_TRUNCATE_LENGTH = 50;
+const SECONDARY_INFO_TRUNCATE_LENGTH = 60;
+
 export interface SearchBarProps {
   /**
    * Placeholder text for the input field
@@ -199,7 +203,7 @@ export function SearchBar({
       case 'event':
         return item.data.name;
       case 'post':
-        return item.data.title || item.data.content?.substring(0, 50) || 'Untitled Post';
+        return item.data.title || item.data.content?.substring(0, POST_TITLE_TRUNCATE_LENGTH) || 'Untitled Post';
     }
   };
 
@@ -209,11 +213,11 @@ export function SearchBar({
   const getSecondaryInfo = (item: SearchResultItem) => {
     switch (item.type) {
       case 'scene':
-        return item.data.description?.substring(0, 60) || null;
+        return item.data.description?.substring(0, SECONDARY_INFO_TRUNCATE_LENGTH) || null;
       case 'event':
-        return item.data.description?.substring(0, 60) || null;
+        return item.data.description?.substring(0, SECONDARY_INFO_TRUNCATE_LENGTH) || null;
       case 'post':
-        return item.data.content?.substring(0, 60) || null;
+        return item.data.content?.substring(0, SECONDARY_INFO_TRUNCATE_LENGTH) || null;
     }
   };
 

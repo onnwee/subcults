@@ -8,7 +8,7 @@ import { apiClient } from '../lib/api-client';
 import type { SearchResults } from '../types/search';
 
 const DEBOUNCE_MS = 300;
-const DEFAULT_LIMIT = 5; // Per category
+const DEFAULT_LIMIT = 5; // Maximum results per category (scenes, events, posts)
 
 export interface UseSearchOptions {
   /**
