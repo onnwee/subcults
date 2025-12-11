@@ -3,6 +3,9 @@
  * HTTP client with automatic token refresh and retry logic
  */
 
+import type { Scene, Event } from '../types/scene';
+import type { Post } from '../types/search';
+
 export interface RequestConfig extends RequestInit {
   skipAuth?: boolean; // Skip adding Authorization header
   skipRetry?: boolean; // Skip retry on 401
@@ -514,7 +517,7 @@ class ApiClient {
     query: string,
     limit: number = 10,
     signal?: AbortSignal
-  ): Promise<any[]> {
+  ): Promise<Scene[]> {
     return this.get(`/search/scenes?q=${encodeURIComponent(query)}&limit=${limit}`, {
       signal,
       skipAutoRetry: true, // Don't retry searches
@@ -531,7 +534,7 @@ class ApiClient {
     query: string,
     limit: number = 10,
     signal?: AbortSignal
-  ): Promise<any[]> {
+  ): Promise<Event[]> {
     return this.get(`/search/events?q=${encodeURIComponent(query)}&limit=${limit}`, {
       signal,
       skipAutoRetry: true, // Don't retry searches
@@ -548,7 +551,7 @@ class ApiClient {
     query: string,
     limit: number = 10,
     signal?: AbortSignal
-  ): Promise<any[]> {
+  ): Promise<Post[]> {
     return this.get(`/search/posts?q=${encodeURIComponent(query)}&limit=${limit}`, {
       signal,
       skipAutoRetry: true, // Don't retry searches

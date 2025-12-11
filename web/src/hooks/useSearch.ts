@@ -5,7 +5,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { apiClient } from '../lib/api-client';
-import type { SearchResults, SearchParams } from '../types/search';
+import type { SearchResults } from '../types/search';
 
 const DEBOUNCE_MS = 300;
 const DEFAULT_LIMIT = 5; // Per category
@@ -41,10 +41,8 @@ export function useSearch(options: UseSearchOptions = {}): UseSearchResult {
   const {
     debounceMs = DEBOUNCE_MS,
     limit = DEFAULT_LIMIT,
-    autoSearch = true,
   } = options;
 
-  const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResults>({
     scenes: [],
     events: [],
@@ -111,8 +109,6 @@ export function useSearch(options: UseSearchOptions = {}): UseSearchResult {
    */
   const search = useCallback(
     (newQuery: string) => {
-      setQuery(newQuery);
-
       // Clear existing timeout
       if (debounceTimeoutRef.current) {
         clearTimeout(debounceTimeoutRef.current);
@@ -142,7 +138,6 @@ export function useSearch(options: UseSearchOptions = {}): UseSearchResult {
       clearTimeout(debounceTimeoutRef.current);
     }
 
-    setQuery('');
     setResults({ scenes: [], events: [], posts: [] });
     setLoading(false);
     setError(null);
