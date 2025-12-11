@@ -15,8 +15,10 @@ import (
 
 	"github.com/onnwee/subcults/internal/api"
 	"github.com/onnwee/subcults/internal/audit"
+	"github.com/onnwee/subcults/internal/livekit"
 	"github.com/onnwee/subcults/internal/middleware"
 	"github.com/onnwee/subcults/internal/scene"
+	"github.com/onnwee/subcults/internal/stream"
 )
 
 func main() {
@@ -52,10 +54,30 @@ func main() {
 	sceneRepo := scene.NewInMemorySceneRepository()
 	auditRepo := audit.NewInMemoryRepository()
 	rsvpRepo := scene.NewInMemoryRSVPRepository()
+	streamRepo := stream.NewInMemorySessionRepository()
+
+	// Initialize LiveKit token service
+	// Get credentials from environment variables
+	livekitAPIKey := os.Getenv("LIVEKIT_API_KEY")
+	livekitAPISecret := os.Getenv("LIVEKIT_API_SECRET")
+	
+	var livekitHandlers *api.LiveKitHandlers
+	if livekitAPIKey != "" && livekitAPISecret != "" {
+		tokenService, err := livekit.NewTokenService(livekitAPIKey, livekitAPISecret)
+		if err != nil {
+			logger.Error("failed to initialize LiveKit token service", "error", err)
+			os.Exit(1)
+		}
+		livekitHandlers = api.NewLiveKitHandlers(tokenService, auditRepo)
+		logger.Info("LiveKit token service initialized")
+	} else {
+		logger.Warn("LiveKit credentials not configured, token endpoint will not be available")
+	}
 
 	// Initialize handlers
 	eventHandlers := api.NewEventHandlers(eventRepo, sceneRepo, auditRepo, rsvpRepo)
 	rsvpHandlers := api.NewRSVPHandlers(rsvpRepo, eventRepo)
+	streamHandlers := api.NewStreamHandlers(streamRepo, sceneRepo, eventRepo, auditRepo)
 
 	// Create HTTP server with routes
 	mux := http.NewServeMux()
@@ -116,6 +138,43 @@ func main() {
 			ctx := middleware.SetErrorCode(r.Context(), api.ErrCodeBadRequest)
 			api.WriteError(w, ctx, http.StatusMethodNotAllowed, api.ErrCodeBadRequest, "Method not allowed")
 		}
+	})
+
+	// LiveKit token endpoint (if configured)
+	if livekitHandlers != nil {
+		mux.HandleFunc("/livekit/token", func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				ctx := middleware.SetErrorCode(r.Context(), api.ErrCodeBadRequest)
+				api.WriteError(w, ctx, http.StatusMethodNotAllowed, api.ErrCodeBadRequest, "Method not allowed")
+				return
+			}
+			livekitHandlers.IssueToken(w, r)
+		})
+	}
+
+	// Stream session routes
+	mux.HandleFunc("/streams", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			ctx := middleware.SetErrorCode(r.Context(), api.ErrCodeBadRequest)
+			api.WriteError(w, ctx, http.StatusMethodNotAllowed, api.ErrCodeBadRequest, "Method not allowed")
+			return
+		}
+		streamHandlers.CreateStream(w, r)
+	})
+
+	mux.HandleFunc("/streams/", func(w http.ResponseWriter, r *http.Request) {
+		// Expected pattern: /streams/{id}/end
+		pathParts := strings.Split(strings.TrimPrefix(r.URL.Path, "/streams/"), "/")
+		
+		// Check if this is an end request: /streams/{id}/end
+		if len(pathParts) == 2 && pathParts[0] != "" && pathParts[1] == "end" && r.Method == http.MethodPost {
+			streamHandlers.EndStream(w, r)
+			return
+		}
+		
+		// No other stream endpoints yet, return 404
+		ctx := middleware.SetErrorCode(r.Context(), api.ErrCodeNotFound)
+		api.WriteError(w, ctx, http.StatusNotFound, api.ErrCodeNotFound, "The requested resource was not found")
 	})
 
 	// Health check endpoint
