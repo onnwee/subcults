@@ -166,6 +166,9 @@ export const useParticipantStore = create<ParticipantStore>((set, get) => ({
         const cached = state.participants[normalizedIdentity];
         if (!cached) return state;
 
+        // Remove timeout from pending updates
+        const { [normalizedIdentity]: removed, ...remainingTimeouts } = state.pendingMuteUpdates;
+
         return {
           participants: {
             ...state.participants,
@@ -180,11 +183,7 @@ export const useParticipantStore = create<ParticipantStore>((set, get) => ({
               },
             },
           },
-          // Remove this timeout from pending updates
-          pendingMuteUpdates: {
-            ...state.pendingMuteUpdates,
-            [normalizedIdentity]: undefined,
-          },
+          pendingMuteUpdates: remainingTimeouts,
         };
       });
     }, MUTE_DEBOUNCE_MS);
@@ -225,6 +224,8 @@ export const useParticipantStore = create<ParticipantStore>((set, get) => ({
   },
 
   // Set local participant identity
+  // Note: Caller is responsible for ensuring the participant exists in the store
+  // Typically called after addParticipant() for the local participant
   setLocalIdentity: (identity: string | null) => {
     set({
       localIdentity: identity ? normalizeIdentity(identity) : null,

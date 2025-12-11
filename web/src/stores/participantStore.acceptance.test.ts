@@ -1,5 +1,3 @@
-#!/usr/bin/env node
-
 /**
  * Participant Store Performance Validation
  * Verifies timing guarantees specified in acceptance criteria
