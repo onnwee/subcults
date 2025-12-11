@@ -6,6 +6,7 @@
 import { useEffect } from 'react';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ToastContainer } from './components/ToastContainer';
+import { ThemeProvider } from './components/ThemeProvider';
 import { AppRouter } from './routes';
 import { authStore } from './stores/authStore';
 import './App.css';
@@ -17,10 +18,12 @@ function App() {
   }, []);
 
   return (
-    <ErrorBoundary>
-      <AppRouter />
-      <ToastContainer />
-    </ErrorBoundary>
+    <ThemeProvider>
+      <ErrorBoundary>
+        <AppRouter />
+        <ToastContainer />
+      </ErrorBoundary>
+    </ThemeProvider>
   );
 }
 
