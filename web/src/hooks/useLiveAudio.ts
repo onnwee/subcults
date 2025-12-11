@@ -85,6 +85,9 @@ export function useLiveAudio(
   roomName: string | null,
   options: UseLiveAudioOptions = {}
 ): UseLiveAudioResult {
+  // Destructure options to avoid dependency on the entire object
+  const { sceneId, eventId, onError } = options;
+  
   const [state, setState] = useState<AudioRoomState>({
     roomName: roomName || '',
     isConnected: false,
@@ -148,8 +151,8 @@ export function useLiveAudio(
             // Fetch new token
             const { expires_at } = await apiClient.getLiveKitToken(
               roomName,
-              options.sceneId,
-              options.eventId
+              sceneId,
+              eventId
             );
 
             // Note: Token refresh in LiveKit 2.x requires reconnection
@@ -167,7 +170,7 @@ export function useLiveAudio(
         }, timeUntilRefresh);
       }
     },
-    [roomName, options.sceneId, options.eventId]
+    [roomName, sceneId, eventId]
   );
 
   /**
@@ -182,8 +185,8 @@ export function useLiveAudio(
       // Fetch token
       const { token, expires_at } = await apiClient.getLiveKitToken(
         roomName,
-        options.sceneId,
-        options.eventId
+        sceneId,
+        eventId
       );
 
       // Create and connect room
@@ -248,8 +251,8 @@ export function useLiveAudio(
         error: errorMessage,
       }));
 
-      if (options.onError) {
-        options.onError(
+      if (onError) {
+        onError(
           error instanceof Error ? error : new Error(errorMessage)
         );
       }
@@ -264,9 +267,9 @@ export function useLiveAudio(
     roomName,
     state.isConnected,
     state.isConnecting,
-    options.sceneId,
-    options.eventId,
-    options.onError,
+    sceneId,
+    eventId,
+    onError,
     updateParticipants,
     scheduleTokenRefresh,
   ]);
@@ -327,6 +330,7 @@ export function useLiveAudio(
           // Volume control may not be available in all LiveKit versions
           // This is a best-effort approach
           try {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             (publication.audioTrack as any).setVolume?.(normalizedVolume);
           } catch (error) {
             console.warn('Volume control not supported:', error);
