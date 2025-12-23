@@ -75,7 +75,7 @@ func main() {
 	}
 
 	// Initialize handlers
-	eventHandlers := api.NewEventHandlers(eventRepo, sceneRepo, auditRepo, rsvpRepo)
+	eventHandlers := api.NewEventHandlers(eventRepo, sceneRepo, auditRepo, rsvpRepo, streamRepo)
 	rsvpHandlers := api.NewRSVPHandlers(rsvpRepo, eventRepo)
 	streamHandlers := api.NewStreamHandlers(streamRepo, sceneRepo, eventRepo, auditRepo)
 
