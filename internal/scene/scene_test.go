@@ -893,3 +893,93 @@ if scenes[0].ID != "scene-2" {
 t.Errorf("Expected scene-2, got %s", scenes[0].ID)
 }
 }
+
+// TestRSVPRepository_GetCountsForEvents_BatchQuery tests batch RSVP counting.
+func TestRSVPRepository_GetCountsForEvents_BatchQuery(t *testing.T) {
+repo := NewInMemoryRSVPRepository()
+
+// Create RSVPs for multiple events
+event1ID := "event-1"
+event2ID := "event-2"
+event3ID := "event-3"
+
+// Event 1: 3 going, 2 maybe
+rsvps1 := []*RSVP{
+{EventID: event1ID, UserID: "user1", Status: "going"},
+{EventID: event1ID, UserID: "user2", Status: "going"},
+{EventID: event1ID, UserID: "user3", Status: "going"},
+{EventID: event1ID, UserID: "user4", Status: "maybe"},
+{EventID: event1ID, UserID: "user5", Status: "maybe"},
+}
+
+// Event 2: 1 going, 0 maybe
+rsvps2 := []*RSVP{
+{EventID: event2ID, UserID: "user6", Status: "going"},
+}
+
+// Event 3: no RSVPs
+
+// Insert all RSVPs
+for _, rsvp := range append(rsvps1, rsvps2...) {
+if err := repo.Upsert(rsvp); err != nil {
+t.Fatalf("Upsert failed: %v", err)
+}
+}
+
+// Batch query
+eventIDs := []string{event1ID, event2ID, event3ID}
+countsMap, err := repo.GetCountsForEvents(eventIDs)
+if err != nil {
+t.Fatalf("GetCountsForEvents failed: %v", err)
+}
+
+// Verify event 1 counts
+if counts, ok := countsMap[event1ID]; !ok {
+t.Error("Expected event 1 to have counts")
+} else {
+if counts.Going != 3 {
+t.Errorf("Event 1: expected 3 going, got %d", counts.Going)
+}
+if counts.Maybe != 2 {
+t.Errorf("Event 1: expected 2 maybe, got %d", counts.Maybe)
+}
+}
+
+// Verify event 2 counts
+if counts, ok := countsMap[event2ID]; !ok {
+t.Error("Expected event 2 to have counts")
+} else {
+if counts.Going != 1 {
+t.Errorf("Event 2: expected 1 going, got %d", counts.Going)
+}
+if counts.Maybe != 0 {
+t.Errorf("Event 2: expected 0 maybe, got %d", counts.Maybe)
+}
+}
+
+// Verify event 3 counts (no RSVPs)
+if counts, ok := countsMap[event3ID]; !ok {
+t.Error("Expected event 3 to have counts")
+} else {
+if counts.Going != 0 {
+t.Errorf("Event 3: expected 0 going, got %d", counts.Going)
+}
+if counts.Maybe != 0 {
+t.Errorf("Event 3: expected 0 maybe, got %d", counts.Maybe)
+}
+}
+}
+
+// TestRSVPRepository_GetCountsForEvents_EmptyInput tests empty input handling.
+func TestRSVPRepository_GetCountsForEvents_EmptyInput(t *testing.T) {
+repo := NewInMemoryRSVPRepository()
+
+countsMap, err := repo.GetCountsForEvents([]string{})
+if err != nil {
+t.Fatalf("GetCountsForEvents failed: %v", err)
+}
+
+if len(countsMap) != 0 {
+t.Errorf("Expected empty map for empty input, got %d entries", len(countsMap))
+}
+}

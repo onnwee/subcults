@@ -310,20 +310,27 @@ func (r *InMemorySessionRepository) EndStreamSession(id string) error {
 
 // GetActiveStreamForEvent retrieves the active stream (ended_at IS NULL) for a given event.
 // Returns nil if no active stream exists for the event.
+// If multiple active streams exist, returns the most recent by started_at.
 func (r *InMemorySessionRepository) GetActiveStreamForEvent(eventID string) (*ActiveStreamInfo, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
+	var best *ActiveStreamInfo
+
 	for _, session := range r.sessions {
 		if session.EventID != nil && *session.EventID == eventID && session.EndedAt == nil {
-			return &ActiveStreamInfo{
-				StreamSessionID: session.ID,
-				RoomName:        session.RoomName,
-				StartedAt:       session.StartedAt,
-			}, nil
+			// If multiple active streams exist for this event, use the most recent one
+			if best == nil || session.StartedAt.After(best.StartedAt) {
+				best = &ActiveStreamInfo{
+					StreamSessionID: session.ID,
+					RoomName:        session.RoomName,
+					StartedAt:       session.StartedAt,
+				}
+			}
 		}
 	}
-	return nil, nil
+
+	return best, nil
 }
 
 // GetActiveStreamsForEvents returns a map of event IDs to their active stream info.

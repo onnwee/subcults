@@ -720,21 +720,21 @@ func (h *EventHandlers) SearchEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	
+	// Batch fetch RSVP counts to avoid N+1 queries
+	rsvpCountsMap, err := h.rsvpRepo.GetCountsForEvents(eventIDs)
+	if err != nil {
+		slog.ErrorContext(r.Context(), "failed to get RSVP counts", "error", err)
+		ctx := middleware.SetErrorCode(r.Context(), ErrCodeInternal)
+		WriteError(w, ctx, http.StatusInternalServerError, ErrCodeInternal, "Failed to retrieve RSVP counts")
+		return
+	}
+	
 	// Build response with events, RSVP counts, and active streams
 	eventsWithData := make([]*EventWithRSVPCounts, len(events))
 	for i, event := range events {
-		// Get RSVP counts for each event
-		rsvpCounts, err := h.rsvpRepo.GetCountsByEvent(event.ID)
-		if err != nil {
-			slog.ErrorContext(r.Context(), "failed to get RSVP counts", "error", err, "event_id", event.ID)
-			ctx := middleware.SetErrorCode(r.Context(), ErrCodeInternal)
-			WriteError(w, ctx, http.StatusInternalServerError, ErrCodeInternal, "Failed to retrieve RSVP counts")
-			return
-		}
-		
 		eventsWithData[i] = &EventWithRSVPCounts{
 			Event:        event,
-			RSVPCounts:   rsvpCounts,
+			RSVPCounts:   rsvpCountsMap[event.ID],
 			ActiveStream: activeStreamsMap[event.ID], // nil if no active stream
 		}
 	}
