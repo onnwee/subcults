@@ -512,6 +512,8 @@ class ApiClient {
    * @param query - Search query
    * @param limit - Maximum results (default: 10)
    * @param signal - AbortSignal for request cancellation
+   * @returns Promise resolving to array of scenes matching the query
+   * @note Results respect visibility settings and location privacy. Private scenes are excluded.
    */
   async searchScenes(
     query: string,
@@ -529,6 +531,8 @@ class ApiClient {
    * @param query - Search query
    * @param limit - Maximum results (default: 10)
    * @param signal - AbortSignal for request cancellation
+   * @returns Promise resolving to array of events matching the query
+   * @note Results respect visibility settings and location privacy. Private events are excluded.
    */
   async searchEvents(
     query: string,
@@ -546,6 +550,8 @@ class ApiClient {
    * @param query - Search query
    * @param limit - Maximum results (default: 10)
    * @param signal - AbortSignal for request cancellation
+   * @returns Promise resolving to array of posts matching the query
+   * @note Results respect visibility settings and location privacy. Private posts are excluded.
    */
   async searchPosts(
     query: string,

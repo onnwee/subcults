@@ -11,6 +11,16 @@ import type { SearchResultItem } from '../types/search';
 // Display constants
 const POST_TITLE_TRUNCATE_LENGTH = 50;
 const SECONDARY_INFO_TRUNCATE_LENGTH = 60;
+const UNTITLED_POST_LABEL = 'Untitled Post';
+
+// Icon constants
+const ICONS = {
+  SCENE: '🎭',
+  EVENT: '📅',
+  POST: '📝',
+  SEARCH: '🔍',
+  CLEAR: '✕',
+} as const;
 
 export interface SearchBarProps {
   /**
@@ -185,11 +195,11 @@ export function SearchBar({
   const getIcon = (type: SearchResultItem['type']) => {
     switch (type) {
       case 'scene':
-        return '🎭';
+        return ICONS.SCENE;
       case 'event':
-        return '📅';
+        return ICONS.EVENT;
       case 'post':
-        return '📝';
+        return ICONS.POST;
     }
   };
 
@@ -203,7 +213,7 @@ export function SearchBar({
       case 'event':
         return item.data.name;
       case 'post':
-        return item.data.title || item.data.content?.substring(0, POST_TITLE_TRUNCATE_LENGTH) || 'Untitled Post';
+        return item.data.title || item.data.content?.substring(0, POST_TITLE_TRUNCATE_LENGTH) || UNTITLED_POST_LABEL;
     }
   };
 
@@ -227,7 +237,7 @@ export function SearchBar({
       <div className="relative">
         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
           <span className="text-foreground-tertiary" aria-hidden="true">
-            🔍
+            {ICONS.SEARCH}
           </span>
         </div>
 
@@ -268,7 +278,7 @@ export function SearchBar({
               focus:outline-none focus-visible:text-brand-primary
             "
           >
-            <span aria-hidden="true">✕</span>
+            <span aria-hidden="true">{ICONS.CLEAR}</span>
           </button>
         )}
       </div>
@@ -287,7 +297,7 @@ export function SearchBar({
         >
           {/* Loading State */}
           {loading && (
-            <div className="p-4 text-center">
+            <div className="p-4 text-center" role="status" aria-live="polite">
               <div className="inline-block animate-spin rounded-full h-6 w-6 border-2 border-brand-primary border-t-transparent" />
               <p className="mt-2 text-sm text-foreground-secondary">Searching...</p>
             </div>
@@ -296,7 +306,7 @@ export function SearchBar({
           {/* Error State */}
           {error && !loading && (
             <div className="p-4 text-center">
-              <p className="text-sm text-red-500">{error}</p>
+              <p className="text-sm text-red-500" role="alert">{error}</p>
             </div>
           )}
 
@@ -314,10 +324,13 @@ export function SearchBar({
             <>
               {/* Scenes */}
               {results.scenes.length > 0 && (
-                <div>
-                  <div className="px-3 py-2 text-xs font-semibold text-foreground-tertiary uppercase tracking-wider bg-background">
+                <div role="group" aria-labelledby="search-results-scenes-heading">
+                  <h3
+                    id="search-results-scenes-heading"
+                    className="px-3 py-2 text-xs font-semibold text-foreground-tertiary uppercase tracking-wider bg-background"
+                  >
                     Scenes
-                  </div>
+                  </h3>
                   {results.scenes.map((scene, idx) => {
                     const flatIdx = idx;
                     const item: SearchResultItem = { type: 'scene', data: scene };
@@ -357,10 +370,13 @@ export function SearchBar({
 
               {/* Events */}
               {results.events.length > 0 && (
-                <div>
-                  <div className="px-3 py-2 text-xs font-semibold text-foreground-tertiary uppercase tracking-wider bg-background">
+                <div role="group" aria-labelledby="search-results-events-heading">
+                  <h3
+                    id="search-results-events-heading"
+                    className="px-3 py-2 text-xs font-semibold text-foreground-tertiary uppercase tracking-wider bg-background"
+                  >
                     Events
-                  </div>
+                  </h3>
                   {results.events.map((event, idx) => {
                     const flatIdx = results.scenes.length + idx;
                     const item: SearchResultItem = { type: 'event', data: event };
@@ -400,10 +416,13 @@ export function SearchBar({
 
               {/* Posts */}
               {results.posts.length > 0 && (
-                <div>
-                  <div className="px-3 py-2 text-xs font-semibold text-foreground-tertiary uppercase tracking-wider bg-background">
+                <div role="group" aria-labelledby="search-results-posts-heading">
+                  <h3
+                    id="search-results-posts-heading"
+                    className="px-3 py-2 text-xs font-semibold text-foreground-tertiary uppercase tracking-wider bg-background"
+                  >
                     Posts
-                  </div>
+                  </h3>
                   {results.posts.map((post, idx) => {
                     const flatIdx = results.scenes.length + results.events.length + idx;
                     const item: SearchResultItem = { type: 'post', data: post };
