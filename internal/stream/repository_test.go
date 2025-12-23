@@ -560,3 +560,43 @@ if err != nil && err.Error() != expectedErrMsg {
 t.Errorf("Expected error message '%s', got '%s'", expectedErrMsg, err.Error())
 }
 }
+
+// TestSessionRepository_GetActiveStreamForEvent_MultipleStreams tests most recent stream selection for single query.
+func TestSessionRepository_GetActiveStreamForEvent_MultipleStreams(t *testing.T) {
+repo := NewInMemorySessionRepository()
+eventID := "event-multi-single"
+
+// Create first active stream
+stream1ID, _, err := repo.CreateStreamSession(nil, &eventID, "did:plc:host1")
+if err != nil {
+t.Fatalf("CreateStreamSession 1 failed: %v", err)
+}
+
+// Wait to ensure different timestamps
+time.Sleep(10 * time.Millisecond)
+
+// Create second active stream (should be more recent)
+stream2ID, room2, err := repo.CreateStreamSession(nil, &eventID, "did:plc:host2")
+if err != nil {
+t.Fatalf("CreateStreamSession 2 failed: %v", err)
+}
+
+// Single query should return the most recent stream
+activeStream, err := repo.GetActiveStreamForEvent(eventID)
+if err != nil {
+t.Fatalf("GetActiveStreamForEvent failed: %v", err)
+}
+
+if activeStream == nil {
+t.Fatal("Expected active stream, got nil")
+}
+
+// Should return the most recent stream (stream2)
+if activeStream.StreamSessionID != stream2ID {
+t.Errorf("Expected most recent stream_session_id '%s', got '%s' (older: '%s')", stream2ID, activeStream.StreamSessionID, stream1ID)
+}
+
+if activeStream.RoomName != room2 {
+t.Errorf("Expected room_name '%s', got '%s'", room2, activeStream.RoomName)
+}
+}

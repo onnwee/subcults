@@ -113,6 +113,10 @@ type RSVPRepository interface {
 
 	// GetCountsByEvent returns aggregated RSVP counts by status for an event.
 	GetCountsByEvent(eventID string) (*RSVPCounts, error)
+	
+	// GetCountsForEvents returns a map of event IDs to their RSVP counts.
+	// This is a batch operation to avoid N+1 queries.
+	GetCountsForEvents(eventIDs []string) (map[string]*RSVPCounts, error)
 }
 
 // InMemorySceneRepository is an in-memory implementation of SceneRepository.
@@ -730,4 +734,41 @@ func (r *InMemoryRSVPRepository) GetCountsByEvent(eventID string) (*RSVPCounts, 
 	}
 
 	return counts, nil
+}
+
+// GetCountsForEvents returns a map of event IDs to their RSVP counts.
+// This is a batch operation to avoid N+1 queries.
+func (r *InMemoryRSVPRepository) GetCountsForEvents(eventIDs []string) (map[string]*RSVPCounts, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	// Create a set of event IDs for efficient lookup
+	eventIDSet := make(map[string]bool, len(eventIDs))
+	for _, id := range eventIDs {
+		eventIDSet[id] = true
+	}
+
+	// Initialize result map with zero counts for all events
+	result := make(map[string]*RSVPCounts, len(eventIDs))
+	for _, id := range eventIDs {
+		result[id] = &RSVPCounts{
+			Going: 0,
+			Maybe: 0,
+		}
+	}
+
+	// Count RSVPs for each event
+	for _, rsvp := range r.rsvps {
+		if eventIDSet[rsvp.EventID] {
+			counts := result[rsvp.EventID]
+			switch rsvp.Status {
+			case "going":
+				counts.Going++
+			case "maybe":
+				counts.Maybe++
+			}
+		}
+	}
+
+	return result, nil
 }
