@@ -39,6 +39,14 @@ type UpsertResult struct {
 	ID       string // The UUID of the upserted record
 }
 
+// ActiveStreamInfo represents active stream information for event payload serialization.
+// Only includes fields needed for frontend display.
+type ActiveStreamInfo struct {
+	StreamSessionID string    `json:"stream_session_id"`
+	RoomName        string    `json:"room_name"`
+	StartedAt       time.Time `json:"started_at"`
+}
+
 // SessionRepository defines the interface for stream session data operations.
 type SessionRepository interface {
 	// Upsert inserts a new session or updates existing one based on (record_did, record_rkey).
@@ -67,6 +75,15 @@ type SessionRepository interface {
 	// Returns true for scenes with at least one active stream (ended_at IS NULL).
 	// This is a batch operation to avoid N+1 queries.
 	HasActiveStreamsForScenes(sceneIDs []string) (map[string]bool, error)
+	
+	// GetActiveStreamForEvent retrieves the active stream (ended_at IS NULL) for a given event.
+	// Returns nil if no active stream exists for the event.
+	GetActiveStreamForEvent(eventID string) (*ActiveStreamInfo, error)
+	
+	// GetActiveStreamsForEvents returns a map of event IDs to their active stream info.
+	// Only includes events with active streams (ended_at IS NULL).
+	// This is a batch operation to avoid N+1 queries.
+	GetActiveStreamsForEvents(eventIDs []string) (map[string]*ActiveStreamInfo, error)
 }
 
 // InMemorySessionRepository is an in-memory implementation of SessionRepository.
@@ -289,4 +306,57 @@ func (r *InMemorySessionRepository) EndStreamSession(id string) error {
 	session.EndedAt = &now
 
 	return nil
+}
+
+// GetActiveStreamForEvent retrieves the active stream (ended_at IS NULL) for a given event.
+// Returns nil if no active stream exists for the event.
+func (r *InMemorySessionRepository) GetActiveStreamForEvent(eventID string) (*ActiveStreamInfo, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	for _, session := range r.sessions {
+		if session.EventID != nil && *session.EventID == eventID && session.EndedAt == nil {
+			return &ActiveStreamInfo{
+				StreamSessionID: session.ID,
+				RoomName:        session.RoomName,
+				StartedAt:       session.StartedAt,
+			}, nil
+		}
+	}
+	return nil, nil
+}
+
+// GetActiveStreamsForEvents returns a map of event IDs to their active stream info.
+// Only includes events with active streams (ended_at IS NULL).
+// This is a batch operation to avoid N+1 queries.
+func (r *InMemorySessionRepository) GetActiveStreamsForEvents(eventIDs []string) (map[string]*ActiveStreamInfo, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	// Create a set of event IDs for efficient lookup
+	eventIDSet := make(map[string]bool, len(eventIDs))
+	for _, id := range eventIDs {
+		eventIDSet[id] = true
+	}
+
+	// Initialize result map
+	result := make(map[string]*ActiveStreamInfo)
+
+	// Find active streams for each event
+	for _, session := range r.sessions {
+		if session.EventID != nil && eventIDSet[*session.EventID] && session.EndedAt == nil {
+			// If multiple active streams exist for an event, use the most recent one
+			eventID := *session.EventID
+			existing, exists := result[eventID]
+			if !exists || session.StartedAt.After(existing.StartedAt) {
+				result[eventID] = &ActiveStreamInfo{
+					StreamSessionID: session.ID,
+					RoomName:        session.RoomName,
+					StartedAt:       session.StartedAt,
+				}
+			}
+		}
+	}
+
+	return result, nil
 }

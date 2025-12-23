@@ -17,6 +17,7 @@ import (
 	"github.com/onnwee/subcults/internal/audit"
 	"github.com/onnwee/subcults/internal/middleware"
 	"github.com/onnwee/subcults/internal/scene"
+	"github.com/onnwee/subcults/internal/stream"
 )
 
 // Event title validation constraints
@@ -58,26 +59,29 @@ type CancelEventRequest struct {
 
 // EventHandlers holds dependencies for event HTTP handlers.
 type EventHandlers struct {
-	eventRepo scene.EventRepository
-	sceneRepo scene.SceneRepository
-	auditRepo audit.Repository
-	rsvpRepo  scene.RSVPRepository
+	eventRepo  scene.EventRepository
+	sceneRepo  scene.SceneRepository
+	auditRepo  audit.Repository
+	rsvpRepo   scene.RSVPRepository
+	streamRepo stream.SessionRepository
 }
 
 // NewEventHandlers creates a new EventHandlers instance.
-func NewEventHandlers(eventRepo scene.EventRepository, sceneRepo scene.SceneRepository, auditRepo audit.Repository, rsvpRepo scene.RSVPRepository) *EventHandlers {
+func NewEventHandlers(eventRepo scene.EventRepository, sceneRepo scene.SceneRepository, auditRepo audit.Repository, rsvpRepo scene.RSVPRepository, streamRepo stream.SessionRepository) *EventHandlers {
 	return &EventHandlers{
-		eventRepo: eventRepo,
-		sceneRepo: sceneRepo,
-		auditRepo: auditRepo,
-		rsvpRepo:  rsvpRepo,
+		eventRepo:  eventRepo,
+		sceneRepo:  sceneRepo,
+		auditRepo:  auditRepo,
+		rsvpRepo:   rsvpRepo,
+		streamRepo: streamRepo,
 	}
 }
 
-// EventWithRSVPCounts represents an event with aggregated RSVP counts.
+// EventWithRSVPCounts represents an event with aggregated RSVP counts and active stream info.
 type EventWithRSVPCounts struct {
 	*scene.Event
-	RSVPCounts *scene.RSVPCounts `json:"rsvp_counts"`
+	RSVPCounts   *scene.RSVPCounts       `json:"rsvp_counts"`
+	ActiveStream *stream.ActiveStreamInfo `json:"active_stream,omitempty"`
 }
 
 // validateEventTitle validates event title according to requirements.
@@ -436,10 +440,20 @@ func (h *EventHandlers) GetEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create response with event and RSVP counts
+	// Get active stream for the event
+	activeStream, err := h.streamRepo.GetActiveStreamForEvent(eventID)
+	if err != nil {
+		slog.ErrorContext(r.Context(), "failed to get active stream", "error", err, "event_id", eventID)
+		ctx := middleware.SetErrorCode(r.Context(), ErrCodeInternal)
+		WriteError(w, ctx, http.StatusInternalServerError, ErrCodeInternal, "Failed to retrieve active stream")
+		return
+	}
+
+	// Create response with event, RSVP counts, and active stream
 	response := EventWithRSVPCounts{
-		Event:      foundEvent,
-		RSVPCounts: rsvpCounts,
+		Event:        foundEvent,
+		RSVPCounts:   rsvpCounts,
+		ActiveStream: activeStream,
 	}
 
 	// Return event with RSVP counts
@@ -556,10 +570,10 @@ func (h *EventHandlers) CancelEvent(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// SearchEventsResponse represents the response for event search.
+// SearchEventsResponse represents the response for event search with active stream info.
 type SearchEventsResponse struct {
-	Events     []*scene.Event `json:"events"`
-	NextCursor string         `json:"next_cursor,omitempty"`
+	Events     []*EventWithRSVPCounts `json:"events"`
+	NextCursor string                 `json:"next_cursor,omitempty"`
 }
 
 // SearchEvents handles GET /search/events - searches events by bbox and time range.
@@ -692,9 +706,42 @@ func (h *EventHandlers) SearchEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	
+	// Batch fetch active streams to avoid N+1 queries
+	eventIDs := make([]string, len(events))
+	for i, event := range events {
+		eventIDs[i] = event.ID
+	}
+	
+	activeStreamsMap, err := h.streamRepo.GetActiveStreamsForEvents(eventIDs)
+	if err != nil {
+		slog.ErrorContext(r.Context(), "failed to get active streams", "error", err)
+		ctx := middleware.SetErrorCode(r.Context(), ErrCodeInternal)
+		WriteError(w, ctx, http.StatusInternalServerError, ErrCodeInternal, "Failed to retrieve active streams")
+		return
+	}
+	
+	// Build response with events, RSVP counts, and active streams
+	eventsWithData := make([]*EventWithRSVPCounts, len(events))
+	for i, event := range events {
+		// Get RSVP counts for each event
+		rsvpCounts, err := h.rsvpRepo.GetCountsByEvent(event.ID)
+		if err != nil {
+			slog.ErrorContext(r.Context(), "failed to get RSVP counts", "error", err, "event_id", event.ID)
+			ctx := middleware.SetErrorCode(r.Context(), ErrCodeInternal)
+			WriteError(w, ctx, http.StatusInternalServerError, ErrCodeInternal, "Failed to retrieve RSVP counts")
+			return
+		}
+		
+		eventsWithData[i] = &EventWithRSVPCounts{
+			Event:        event,
+			RSVPCounts:   rsvpCounts,
+			ActiveStream: activeStreamsMap[event.ID], // nil if no active stream
+		}
+	}
+	
 	// Return response
 	response := SearchEventsResponse{
-		Events:     events,
+		Events:     eventsWithData,
 		NextCursor: nextCursor,
 	}
 	
