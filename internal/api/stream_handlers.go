@@ -370,9 +370,25 @@ func (h *StreamHandlers) JoinStream(w http.ResponseWriter, r *http.Request) {
 	if req.TokenIssuedAt != "" {
 		tokenTime, err := time.Parse(time.RFC3339, req.TokenIssuedAt)
 		if err == nil {
-			latency := time.Since(tokenTime).Seconds()
-			if h.streamMetrics != nil {
-				h.streamMetrics.ObserveStreamJoinLatency(latency)
+			now := time.Now()
+			// Validate token time is not in the future (client clock skew)
+			if tokenTime.After(now) {
+				slog.WarnContext(ctx, "token_issued_at is in the future, skipping latency recording",
+					"token_time", tokenTime,
+					"current_time", now,
+					"stream_id", streamID)
+			} else {
+				latency := now.Sub(tokenTime).Seconds()
+				// Validate token is not too old (max 5 minutes to represent actual join time)
+				const maxTokenAge = 5 * 60 // 5 minutes in seconds
+				if latency > maxTokenAge {
+					slog.WarnContext(ctx, "token_issued_at is too old, skipping latency recording",
+						"token_age_seconds", latency,
+						"max_age_seconds", maxTokenAge,
+						"stream_id", streamID)
+				} else if h.streamMetrics != nil {
+					h.streamMetrics.ObserveStreamJoinLatency(latency)
+				}
 			}
 		} else {
 			slog.WarnContext(ctx, "invalid token_issued_at timestamp", "error", err, "value", req.TokenIssuedAt)
@@ -397,11 +413,24 @@ func (h *StreamHandlers) JoinStream(w http.ResponseWriter, r *http.Request) {
 		)
 	}
 
-	// Return success response
+	// Re-fetch session to get the updated join count from storage
+	updatedSession, err := h.streamRepo.GetByID(streamID)
+	if err != nil {
+		// Log error but continue using the previously loaded session
+		slog.ErrorContext(ctx, "failed to refresh stream session after join",
+			"error", err,
+			"stream_id", streamID,
+			"user_did", userDID,
+		)
+	} else {
+		session = updatedSession
+	}
+
+	// Return success response with the persisted join count
 	response := map[string]interface{}{
 		"stream_id":  streamID,
 		"room_name":  session.RoomName,
-		"join_count": session.JoinCount + 1, // +1 because we just incremented
+		"join_count": session.JoinCount,
 		"status":     "joined",
 	}
 
@@ -483,11 +512,24 @@ func (h *StreamHandlers) LeaveStream(w http.ResponseWriter, r *http.Request) {
 		)
 	}
 
-	// Return success response
+	// Re-fetch session to get the updated leave count from storage
+	updatedSession, err := h.streamRepo.GetByID(streamID)
+	if err != nil {
+		// Log error but continue using the previously loaded session
+		slog.ErrorContext(ctx, "failed to refresh stream session after leave",
+			"error", err,
+			"stream_id", streamID,
+			"user_did", userDID,
+		)
+	} else {
+		session = updatedSession
+	}
+
+	// Return success response with the persisted leave count
 	response := map[string]interface{}{
 		"stream_id":   streamID,
 		"room_name":   session.RoomName,
-		"leave_count": session.LeaveCount + 1, // +1 because we just incremented
+		"leave_count": session.LeaveCount,
 		"status":      "left",
 	}
 

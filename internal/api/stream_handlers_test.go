@@ -749,3 +749,70 @@ if session.LeaveCount != 2 {
 t.Errorf("expected LeaveCount 2, got %d", session.LeaveCount)
 }
 }
+
+// TestJoinStream_WithNilMetrics tests that join/leave handlers work correctly when metrics collection is disabled.
+func TestJoinStream_WithNilMetrics(t *testing.T) {
+streamRepo := stream.NewInMemorySessionRepository()
+sceneRepo := scene.NewInMemorySceneRepository()
+eventRepo := scene.NewInMemoryEventRepository()
+auditRepo := audit.NewInMemoryRepository()
+// Pass nil for metrics to test the nil check path
+handlers := NewStreamHandlers(streamRepo, sceneRepo, eventRepo, auditRepo, nil)
+
+// Create a scene and stream session first
+testScene := &scene.Scene{
+ID:            uuid.New().String(),
+Name:          "Test Scene",
+OwnerDID:      "did:plc:test123",
+CoarseGeohash: "dr5regw",
+CreatedAt:     &time.Time{},
+}
+if err := sceneRepo.Insert(testScene); err != nil {
+t.Fatalf("failed to insert scene: %v", err)
+}
+
+streamID, _, err := streamRepo.CreateStreamSession(ptrString(testScene.ID), nil, testScene.OwnerDID)
+if err != nil {
+t.Fatalf("failed to create stream: %v", err)
+}
+
+// Test join with nil metrics
+joinReq := httptest.NewRequest(http.MethodPost, "/streams/"+streamID+"/join", nil)
+joinCtx := middleware.SetUserDID(joinReq.Context(), testScene.OwnerDID)
+joinReq = joinReq.WithContext(joinCtx)
+joinRR := httptest.NewRecorder()
+handlers.JoinStream(joinRR, joinReq)
+
+if joinRR.Code != http.StatusOK {
+t.Errorf("join failed with nil metrics: expected status 200, got %d: %s", joinRR.Code, joinRR.Body.String())
+}
+
+// Verify database was updated despite nil metrics
+session, err := streamRepo.GetByID(streamID)
+if err != nil {
+t.Fatalf("failed to get session: %v", err)
+}
+if session.JoinCount != 1 {
+t.Errorf("expected JoinCount 1, got %d", session.JoinCount)
+}
+
+// Test leave with nil metrics
+leaveReq := httptest.NewRequest(http.MethodPost, "/streams/"+streamID+"/leave", nil)
+leaveCtx := middleware.SetUserDID(leaveReq.Context(), testScene.OwnerDID)
+leaveReq = leaveReq.WithContext(leaveCtx)
+leaveRR := httptest.NewRecorder()
+handlers.LeaveStream(leaveRR, leaveReq)
+
+if leaveRR.Code != http.StatusOK {
+t.Errorf("leave failed with nil metrics: expected status 200, got %d: %s", leaveRR.Code, leaveRR.Body.String())
+}
+
+// Verify leave count was updated
+session, err = streamRepo.GetByID(streamID)
+if err != nil {
+t.Fatalf("failed to get session: %v", err)
+}
+if session.LeaveCount != 1 {
+t.Errorf("expected LeaveCount 1, got %d", session.LeaveCount)
+}
+}

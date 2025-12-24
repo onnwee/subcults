@@ -201,8 +201,22 @@ func main() {
 		api.WriteError(w, ctx, http.StatusNotFound, api.ErrCodeNotFound, "The requested resource was not found")
 	})
 
-	// Metrics endpoint (Prometheus)
-	mux.Handle("/metrics", promhttp.HandlerFor(promRegistry, promhttp.HandlerOpts{}))
+	// Metrics endpoint (Prometheus) - protected with bearer token auth if configured
+	metricsToken := os.Getenv("METRICS_AUTH_TOKEN")
+	metricsHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// If token is configured, enforce authentication
+		if metricsToken != "" {
+			const bearerPrefix = "Bearer "
+			authHeader := r.Header.Get("Authorization")
+			if !strings.HasPrefix(authHeader, bearerPrefix) || authHeader[len(bearerPrefix):] != metricsToken {
+				http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+				return
+			}
+		}
+		// If no token is configured, allow unauthenticated access (for development)
+		promhttp.HandlerFor(promRegistry, promhttp.HandlerOpts{}).ServeHTTP(w, r)
+	})
+	mux.Handle("/metrics", metricsHandler)
 
 	// Health check endpoint
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {

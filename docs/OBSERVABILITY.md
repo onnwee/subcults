@@ -175,12 +175,12 @@ groups:
     rules:
       # High join latency
       - alert: HighStreamJoinLatency
-        expr: histogram_quantile(0.95, rate(stream_join_latency_seconds_bucket[5m])) > 5
+        expr: histogram_quantile(0.95, rate(stream_join_latency_seconds_bucket[5m])) > 3
         for: 10m
         labels:
           severity: warning
         annotations:
-          summary: "Stream join latency above 5s (p95)"
+          summary: "Stream join latency above 3s (p95)"
           description: "95th percentile join latency is {{ $value }}s"
 
       # Join failures (inferred from high leave rate shortly after joins)
