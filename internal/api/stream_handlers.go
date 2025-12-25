@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/onnwee/subcults/internal/audit"
 	"github.com/onnwee/subcults/internal/middleware"
@@ -32,10 +33,11 @@ type StreamSessionResponse struct {
 
 // StreamHandlers holds dependencies for stream session HTTP handlers.
 type StreamHandlers struct {
-	streamRepo stream.SessionRepository
-	sceneRepo  scene.SceneRepository
-	eventRepo  scene.EventRepository
-	auditRepo  audit.Repository
+	streamRepo    stream.SessionRepository
+	sceneRepo     scene.SceneRepository
+	eventRepo     scene.EventRepository
+	auditRepo     audit.Repository
+	streamMetrics *stream.Metrics
 }
 
 // NewStreamHandlers creates a new StreamHandlers instance.
@@ -44,12 +46,14 @@ func NewStreamHandlers(
 	sceneRepo scene.SceneRepository,
 	eventRepo scene.EventRepository,
 	auditRepo audit.Repository,
+	streamMetrics *stream.Metrics,
 ) *StreamHandlers {
 	return &StreamHandlers{
-		streamRepo: streamRepo,
-		sceneRepo:  sceneRepo,
-		eventRepo:  eventRepo,
-		auditRepo:  auditRepo,
+		streamRepo:    streamRepo,
+		sceneRepo:     sceneRepo,
+		eventRepo:     eventRepo,
+		auditRepo:     auditRepo,
+		streamMetrics: streamMetrics,
 	}
 }
 
@@ -293,4 +297,245 @@ func (h *StreamHandlers) isSceneOwner(ctx context.Context, sceneID, userDID stri
 		return false, err
 	}
 	return foundScene.IsOwner(userDID), nil
+}
+
+// JoinStreamRequest represents the request body for recording a join event.
+type JoinStreamRequest struct {
+	TokenIssuedAt string `json:"token_issued_at"` // RFC3339 timestamp from token issuance
+}
+
+// JoinStream handles POST /streams/{id}/join - records a join event and metrics.
+func (h *StreamHandlers) JoinStream(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Extract user DID from context (set by auth middleware)
+	userDID := middleware.GetUserDID(ctx)
+	if userDID == "" {
+		ctx = middleware.SetErrorCode(ctx, ErrCodeAuthFailed)
+		WriteError(w, ctx, http.StatusUnauthorized, ErrCodeAuthFailed, "Authentication required")
+		return
+	}
+
+	// Extract stream ID from URL path
+	// Expected: /streams/{id}/join
+	pathParts := strings.Split(strings.TrimPrefix(r.URL.Path, "/streams/"), "/")
+	if len(pathParts) != 2 || pathParts[0] == "" || pathParts[1] != "join" {
+		ctx = middleware.SetErrorCode(ctx, ErrCodeBadRequest)
+		WriteError(w, ctx, http.StatusBadRequest, ErrCodeBadRequest, "Invalid URL path")
+		return
+	}
+	streamID := pathParts[0]
+
+	// Verify stream exists
+	session, err := h.streamRepo.GetByID(streamID)
+	if err != nil {
+		if errors.Is(err, stream.ErrStreamNotFound) {
+			ctx = middleware.SetErrorCode(ctx, ErrCodeNotFound)
+			WriteError(w, ctx, http.StatusNotFound, ErrCodeNotFound, "Stream session not found")
+		} else {
+			slog.ErrorContext(ctx, "failed to get stream session", "error", err)
+			ctx = middleware.SetErrorCode(ctx, ErrCodeInternal)
+			WriteError(w, ctx, http.StatusInternalServerError, ErrCodeInternal, "Internal server error")
+		}
+		return
+	}
+
+	// Parse optional request body for latency tracking
+	var req JoinStreamRequest
+	if r.Body != nil {
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			// Non-fatal: continue without latency tracking
+			slog.WarnContext(ctx, "failed to decode join request body", "error", err)
+		}
+	}
+
+	// Record join in repository
+	if err := h.streamRepo.RecordJoin(streamID); err != nil {
+		slog.ErrorContext(ctx, "failed to record join",
+			"error", err,
+			"stream_id", streamID,
+			"user_did", userDID,
+		)
+		ctx = middleware.SetErrorCode(ctx, ErrCodeInternal)
+		WriteError(w, ctx, http.StatusInternalServerError, ErrCodeInternal, "Failed to record join event")
+		return
+	}
+
+	// Increment Prometheus counter
+	if h.streamMetrics != nil {
+		h.streamMetrics.IncStreamJoins()
+	}
+
+	// Calculate and record join latency if token_issued_at was provided
+	if req.TokenIssuedAt != "" {
+		tokenTime, err := time.Parse(time.RFC3339, req.TokenIssuedAt)
+		if err == nil {
+			now := time.Now()
+			// Validate token time is not in the future (client clock skew)
+			if tokenTime.After(now) {
+				slog.WarnContext(ctx, "token_issued_at is in the future, skipping latency recording",
+					"token_time", tokenTime,
+					"current_time", now,
+					"stream_id", streamID)
+			} else {
+				latency := now.Sub(tokenTime).Seconds()
+				// Validate token is not too old (max 5 minutes to represent actual join time)
+				const maxTokenAge = 5 * 60 // 5 minutes in seconds
+				if latency > maxTokenAge {
+					slog.WarnContext(ctx, "token_issued_at is too old, skipping latency recording",
+						"token_age_seconds", latency,
+						"max_age_seconds", maxTokenAge,
+						"stream_id", streamID)
+				} else if h.streamMetrics != nil {
+					h.streamMetrics.ObserveStreamJoinLatency(latency)
+				}
+			}
+		} else {
+			slog.WarnContext(ctx, "invalid token_issued_at timestamp", "error", err, "value", req.TokenIssuedAt)
+		}
+	}
+
+	// Log join event for audit
+	auditEntry := audit.LogEntry{
+		UserDID:    userDID,
+		EntityType: "stream_session",
+		EntityID:   streamID,
+		Action:     "joined",
+		RequestID:  middleware.GetRequestID(ctx),
+	}
+
+	if _, err := h.auditRepo.LogAccess(auditEntry); err != nil {
+		// Log error but don't fail the request
+		slog.ErrorContext(ctx, "failed to log join audit entry",
+			"error", err,
+			"stream_id", streamID,
+			"user_did", userDID,
+		)
+	}
+
+	// Re-fetch session to get the updated join count from storage
+	updatedSession, err := h.streamRepo.GetByID(streamID)
+	if err != nil {
+		// Log error but continue using the previously loaded session
+		slog.ErrorContext(ctx, "failed to refresh stream session after join",
+			"error", err,
+			"stream_id", streamID,
+			"user_did", userDID,
+		)
+	} else {
+		session = updatedSession
+	}
+
+	// Return success response with the persisted join count
+	response := map[string]interface{}{
+		"stream_id":  streamID,
+		"room_name":  session.RoomName,
+		"join_count": session.JoinCount,
+		"status":     "joined",
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		slog.ErrorContext(ctx, "failed to encode join response", "error", err)
+	}
+}
+
+// LeaveStream handles POST /streams/{id}/leave - records a leave event and metrics.
+func (h *StreamHandlers) LeaveStream(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Extract user DID from context (set by auth middleware)
+	userDID := middleware.GetUserDID(ctx)
+	if userDID == "" {
+		ctx = middleware.SetErrorCode(ctx, ErrCodeAuthFailed)
+		WriteError(w, ctx, http.StatusUnauthorized, ErrCodeAuthFailed, "Authentication required")
+		return
+	}
+
+	// Extract stream ID from URL path
+	// Expected: /streams/{id}/leave
+	pathParts := strings.Split(strings.TrimPrefix(r.URL.Path, "/streams/"), "/")
+	if len(pathParts) != 2 || pathParts[0] == "" || pathParts[1] != "leave" {
+		ctx = middleware.SetErrorCode(ctx, ErrCodeBadRequest)
+		WriteError(w, ctx, http.StatusBadRequest, ErrCodeBadRequest, "Invalid URL path")
+		return
+	}
+	streamID := pathParts[0]
+
+	// Verify stream exists
+	session, err := h.streamRepo.GetByID(streamID)
+	if err != nil {
+		if errors.Is(err, stream.ErrStreamNotFound) {
+			ctx = middleware.SetErrorCode(ctx, ErrCodeNotFound)
+			WriteError(w, ctx, http.StatusNotFound, ErrCodeNotFound, "Stream session not found")
+		} else {
+			slog.ErrorContext(ctx, "failed to get stream session", "error", err)
+			ctx = middleware.SetErrorCode(ctx, ErrCodeInternal)
+			WriteError(w, ctx, http.StatusInternalServerError, ErrCodeInternal, "Internal server error")
+		}
+		return
+	}
+
+	// Record leave in repository
+	if err := h.streamRepo.RecordLeave(streamID); err != nil {
+		slog.ErrorContext(ctx, "failed to record leave",
+			"error", err,
+			"stream_id", streamID,
+			"user_did", userDID,
+		)
+		ctx = middleware.SetErrorCode(ctx, ErrCodeInternal)
+		WriteError(w, ctx, http.StatusInternalServerError, ErrCodeInternal, "Failed to record leave event")
+		return
+	}
+
+	// Increment Prometheus counter
+	if h.streamMetrics != nil {
+		h.streamMetrics.IncStreamLeaves()
+	}
+
+	// Log leave event for audit
+	auditEntry := audit.LogEntry{
+		UserDID:    userDID,
+		EntityType: "stream_session",
+		EntityID:   streamID,
+		Action:     "left",
+		RequestID:  middleware.GetRequestID(ctx),
+	}
+
+	if _, err := h.auditRepo.LogAccess(auditEntry); err != nil {
+		// Log error but don't fail the request
+		slog.ErrorContext(ctx, "failed to log leave audit entry",
+			"error", err,
+			"stream_id", streamID,
+			"user_did", userDID,
+		)
+	}
+
+	// Re-fetch session to get the updated leave count from storage
+	updatedSession, err := h.streamRepo.GetByID(streamID)
+	if err != nil {
+		// Log error but continue using the previously loaded session
+		slog.ErrorContext(ctx, "failed to refresh stream session after leave",
+			"error", err,
+			"stream_id", streamID,
+			"user_did", userDID,
+		)
+	} else {
+		session = updatedSession
+	}
+
+	// Return success response with the persisted leave count
+	response := map[string]interface{}{
+		"stream_id":   streamID,
+		"room_name":   session.RoomName,
+		"leave_count": session.LeaveCount,
+		"status":      "left",
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		slog.ErrorContext(ctx, "failed to encode leave response", "error", err)
+	}
 }
