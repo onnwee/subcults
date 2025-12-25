@@ -259,7 +259,7 @@ export function useLiveAudio(
       
       // Track first audio subscription for latency measurement (t3)
       let firstAudioTracked = false;
-      room.on(RoomEvent.TrackSubscribed, (track, publication, participant: LKParticipant) => {
+      room.on(RoomEvent.TrackSubscribed, (track) => {
         if (!firstAudioTracked && track.kind === 'audio') {
           const latencyStore = useLatencyStore.getState();
           latencyStore.recordFirstAudioSubscribed();
