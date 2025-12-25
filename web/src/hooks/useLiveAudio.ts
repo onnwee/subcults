@@ -181,9 +181,13 @@ export function useLiveAudio(
   const connect = useCallback(async () => {
     if (!roomName || state.isConnected || state.isConnecting) return;
 
-    // Reset latency tracking for new join attempt
+    // Reset latency tracking for new join attempt (including lastLatency to avoid stale metrics)
     const latencyStore = useLatencyStore.getState();
     latencyStore.resetLatency();
+    useLatencyStore.setState((prev) => ({
+      ...prev,
+      lastLatency: null,
+    }));
 
     setState((prev) => ({ ...prev, isConnecting: true, error: null }));
 
@@ -365,6 +369,8 @@ export function useLiveAudio(
     }
 
     if (roomRef.current) {
+      // Remove all event listeners to prevent memory leaks and duplicate handlers
+      roomRef.current.removeAllListeners();
       roomRef.current.disconnect();
       roomRef.current = null;
     }

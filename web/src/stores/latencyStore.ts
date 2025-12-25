@@ -150,7 +150,9 @@ export const useLatencyStore = create<LatencyStore>((set, get) => ({
     }
   },
 
-  // Reset current latency
+  // Reset latency state
+  // Note: This only resets currentLatency. To clear lastLatency as well,
+  // call useLatencyStore.setState({ lastLatency: null }) separately
   resetLatency: () => {
     set({
       currentLatency: { ...emptyLatency },
